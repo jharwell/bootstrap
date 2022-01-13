@@ -1,0 +1,30 @@
+diff -Naur project-config.jam project-config.jam
+--- project-config.jam	2022-01-12 11:12:28.243282984 -0600
++++ project-config.jam	2022-01-12 11:13:18.222669317 -0600
+@@ -9,7 +9,7 @@
+ # file.
+ if ! gcc in [ feature.values <toolset> ]
+ {
+-    using gcc ; 
++    using gcc : arm : arm-linux-gnueabihf-g++ ;
+ }
+ 
+ project : default-build <toolset>gcc ;
+diff -Naur tools/build/src/tools/common.jam tools/build/src/tools/common.jam
+--- tools/build/src/tools/common.jam	2019-08-14 07:03:50.000000000 -0500
++++ tools/build/src/tools/common.jam	2022-01-12 11:13:31.678504121 -0600
+@@ -974,10 +974,10 @@
+     }
+ 
+     # From GCC 5, versioning changes and minor becomes patch
+-    if $(tag) = gcc && [ numbers.less 4 $(version[1]) ]
+-    {
+-        version = $(version[1]) ;
+-    }
++    #if $(tag) = gcc && [ numbers.less 4 $(version[1]) ]
++    #{
++        #version = $(version[1]) ;
++    #}
+ 
+     # Ditto, from Clang 4
+     if ( $(tag) = clang || $(tag) = clangw ) && [ numbers.less 3 $(version[1]) ]
