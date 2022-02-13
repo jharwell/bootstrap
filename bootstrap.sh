@@ -18,9 +18,9 @@ Usage: $0 [--nosyspkgs] [--sysprefix] [-rprefix] [--rroot] [-h|--help]
 
 --platform [ARGOS,ROS]: The platform you are bootstrapping stuff for.
 
---arch [x86_64,arm]: The architecture to build for. Default=x86_64.
-
 -f|--force: Don't prompt before executing the bootstrap.
+
+--env [devel,turtlebot]: The type of environment to setup. Default=turtlebot.
 
 --opt: Optimized build
 
@@ -40,10 +40,11 @@ sys_install_prefix=$HOME/.local/system
 research_install_prefix=$HOME/.local
 research_root=$HOME/research
 platform=ARGOS
-arch="x86_64"
 do_prompt="YES"
 build_type="DEV"
-options=$(getopt -o hf --long help,opt,nosyspkgs,force,sysprefix:,rprefix:,rroot:,platform:,arch:  -n "BOOTSTRAP" -- "$@")
+env_type="devel"
+
+options=$(getopt -o hf --long help,opt,nosyspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:  -n "BOOTSTRAP" -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$options"
@@ -57,7 +58,7 @@ while true; do
         --rprefix) research_install_prefix=$2; shift;;
         --rroot) research_root=$2; shift;;
         --platform) platform=$2; shift;;
-        --arch) arch=$2; shift;;
+        --env) env_type=$2; shift;;
         --) break;;
         *) break;;
     esac
@@ -72,41 +73,44 @@ done
 function bootstrap_main() {
     # Install system packages
     if [ "YES" = "$install_sys_pkgs" ]; then
-        libra_pkgs=(make
-                    cmake
-                    git
-                    nodejs
-                    npm
-                    graphviz
-                    ccache
-                    doxygen
-                    cppcheck
-                    gcc-9
-                    g++-9
-                    gcc-9-arm-linux-gnueabihf
-                    g++-9-arm-linux-gnueabihf
-                    libclang-10-dev
-                    clang-tools-10
-                    clang-format-10
-                    clang-tidy-10
-                   )
+        libra_pkgs_core=(make
+                         cmake
+                         git
+                         ccache
+                         gcc-9
+                         g++-9
+                         gcc-9-arm-linux-gnueabihf
+                         g++-9-arm-linux-gnueabihf
+                        )
 
-        rcppsw_pkgs=(libboost-all-dev
-                     liblog4cxx-dev
-                     catch
-                     ccache
-                     python3-pip
-                    )
+        libra_pkgs_devel=(nodejs
+                          npm
+                          graphviz
+                          doxygen
+                          cppcheck
+                          libclang-10-dev
+                          clang-tools-10
+                          clang-format-10
+                          clang-tidy-10
+                         )
 
-        cosm_pkgs=(qtbase5-dev
-                   libfreeimageplus-dev
-                   freeglut3-dev
-                   libeigen3-dev
-                   libudev-dev
-                   ros-noetic-desktop-full # Not present on rasberry pi
-                   ros-noetic-ros-base
-                   liblua5.3-dev
-                  )
+        rcppsw_pkgs_core=(libboost-all-dev
+                          liblog4cxx-dev
+                          catch
+                          python3-pip
+                         )
+
+        cosm_pkgs_core=(ros-noetic-ros-base
+                       )
+
+        cosm_pkgs_devel=(qtbase5-dev
+                        libfreeimageplus-dev
+                        freeglut3-dev
+                        libeigen3-dev
+                        libudev-dev
+                        ros-noetic-desktop-full
+                        liblua5.3-dev
+                       )
 
         # Modern cmake required, default with most ubuntu versions is too
         # old--use kitware PPA.
@@ -114,20 +118,41 @@ function bootstrap_main() {
         echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
         sudo apt-get update
 
-        # Install packages (must be loop to ignore ones that don't exist)
-        for pkg in "${libra_pkgs[@]} ${rcppsw_pkgs[@]} ${cosm_pkgs[@]}"
+        # Install core packages (must be loop to ignore ones that don't exist).
+        for pkg in "${libra_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]}"
         do
             sudo apt-get -my install $pkg
         done
+
+        if [ "$env_type" = "devel" ]; then
+            # Install extra development packages (must be loop to ignore
+            # ones that don't exist).
+            for pkg in "${libra_pkgs_devel[@]} ${rcppsw_pkgs_devel[@]} ${cosm_pkgs_devel[@]}"
+            do
+                sudo apt-get -my install $pkg
+            done
+        fi
     fi
 
-    python_pkgs=(
-        # RCPPSW packages
-        cpplint
-        breathe
-        exhale
-    )
-    pip3 install --user  "${python_pkgs[@]}"
+
+
+    if [ "$env_type" = "devel" ]; then
+        python_pkgs_devel=(
+            # RCPPSW packages
+            cpplint
+            breathe
+            exhale
+        )
+        pip3 install --user  "${python_pkgs_devel[@]}"
+    fi
+
+    if [ "$platform" = "ROS" ]; then
+        python_pkgs_core=(
+            catkin_tools
+        )
+        pip3 install --user  "${python_pkgs_core[@]}"
+    fi
+    export PATH=$PATH:$HOME/.local/bin
 
     # Exit when any command after this fails. Can't be before the package
     # installs, because it is not an error if some of the packages are not found
@@ -139,12 +164,12 @@ function bootstrap_main() {
     bootstrap_dir=$(pwd)
     mkdir -p $research_root && cd $research_root
 
-    # LIBRA
-    # git clone https://github.com/swarm-robotics/libra.git
-
     er=$([ "OPT" = "$build_type" ] && echo "NONE" || echo "ALL")
+    rcppsw_args=$([ "turtlebot" = "$env_type" ] && echo "-DRCPPSW_AL_MT_SAFE_TYPES=NO" || echo "")
 
-    arch=$([ "arm" = "$arch" ] && echo "-DCMAKE_TOOLCHAIN_FILE=$research_root/libra/cmake/arm-linux-gnueabihf-toolchain.cmake" || echo "")
+    # Turtlebot actually has 4 cores, but not enough memory to be able
+    # to do parallel compilation. 
+    n_cores=$([ "turtlebot" = "$env_type" ] && echo "-DN_CORES=1" || echo "")
 
     cmake \
         -DPLATFORM=$platform \
@@ -152,10 +177,21 @@ function bootstrap_main() {
         -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
         -DLIBRA_ER=$er \
         -DCMAKE_BUILD_TYPE=$build_type \
-        $arch \
+        $n_cores \
+        $rcppsw_args \
         $bootstrap_dir
 
     make
+
+    if [ "$platform" = "ROS" ]; then
+        rm -rf $research_root/rosbridge
+        mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
+         git clone -b devel https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
+        git clone -b devel https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
+        catkin init
+        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
+        catkin build
+    fi
 
     # Made it!
     echo -e "********************************************************************************"
@@ -175,7 +211,7 @@ function bootstrap_prompt() {
     echo -e "Install compiled dependencies to         : $sys_install_prefix"
     echo -e "Install compiled research projects to    : $research_install_prefix"
     echo -e "Platform                                 : $platform"
-    echo -e "Architecture                             : $arch"
+    echo -e "Environment setup                        : $env_type"
     echo -e "Build type                               : $build_type"
     echo -e ""
     echo -e ""

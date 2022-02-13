@@ -5,8 +5,10 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 include(ExternalProject)
 
 include(ProcessorCount)
-ProcessorCount(N_CORES)
-# set(N_CORES 1)
+
+if(NOT DEFINED N_CORES)
+  ProcessorCount(N_CORES)
+endif()
 
 if (CMAKE_CROSS_COMPILING)
   if(NOT RESEARCH_INSTALL_PREFIX)
@@ -71,13 +73,13 @@ ExternalProject_Add(rcppsw
   DEPENDS rcsw
   PREFIX .
   GIT_REPOSITORY https://github.com/swarm-robotics/rcppsw.git
-  GIT_TAG devel
+  GIT_TAG enh/311/better-er-errors
   CMAKE_ARGS
   -DCMAKE_INSTALL_PREFIX=${RESEARCH_INSTALL_PREFIX}
   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
   -DLIBRA_ER=${LIBRA_ER}
-
-  UPDATE_COMMAND mkdir -p build
+  -DRCPPSW_AL_MT_SAFE_TYPES=${RCPPSW_AL_MT_SAFE_TYPES}
+  UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
   BUILD_COMMAND make all -j ${N_CORES}
   SOURCE_DIR rcppsw
   BINARY_DIR rcppsw/build
@@ -171,8 +173,8 @@ elseif ("${PLATFORM}" MATCHES "ROS")
     DEPENDS rcppsw
     PREFIX .
     GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
-    GIT_TAG feature/164/base-ros-controller
-    UPDATE_COMMAND mkdir -p build
+    GIT_TAG enh/171/ros-swarm-manager
+    UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
     BUILD_COMMAND make all -j ${N_CORES}
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=ROS_TURTLEBOT3
@@ -188,10 +190,9 @@ elseif ("${PLATFORM}" MATCHES "ROS")
     DEPENDS cosm
     PREFIX .
     GIT_REPOSITORY https://github.com/swarm-robotics/fordyca.git
-    GIT_TAG refactor/721/COSM-164-flowdown
-    UPDATE_COMMAND mkdir -p build
+    GIT_TAG feature/727/ros-d0-swarm-manager
+    UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
     BUILD_COMMAND make all -j ${N_CORES}
-    INSTALL_COMMAND ""
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=ROS_TURTLEBOT3
     -DCMAKE_INSTALL_PREFIX=${RESEARCH_INSTALL_PREFIX}
