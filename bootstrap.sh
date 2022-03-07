@@ -2,10 +2,10 @@
 #
 usage() {
     cat << EOF >&2
-Usage: $0 [--nosyspkgs] [--sysprefix] [-rprefix] [--rroot] [-h|--help]
+Usage: $0 [option]... [-h|--help]
 
---nosyspkgs: If passed, then do not install system packages (requires sudo
-             access). Default=YES (install system packages).
+--syspkgs: If passed, install system .deb packages (requires sudo
+             access). Default=NO (don't install system packages).
 
 --sysprefix <dir>: The directory to install ARGoS and other system dependencies
                    to. Default=$HOME/.local/system.
@@ -16,13 +16,36 @@ Usage: $0 [--nosyspkgs] [--sysprefix] [-rprefix] [--rroot] [-h|--help]
 --rroot <dir>: The root directory for all repos for the project. All github
                repos will be cloned/built in here. Default=$HOME/research.
 
+
 --platform [ARGOS,ROS]: The platform you are bootstrapping stuff for.
 
--f|--force: Don't prompt before executing the bootstrap.
+--er [ALL,FATAL,NONE]: The level of event logging to enable. Default=ALL.
 
---env [devel,turtlebot]: The type of environment to setup. Default=turtlebot.
+--opt: Optimized build (i.e., compile with optimizations on).
 
---opt: Optimized build
+--branch: A <repo>:<branch> pair defining the branch which will be
+  checked out for the specified repo.  Pass --branch multiple times to
+  configure specific repos. Default=devel for all.
+
+--env [DEVEL,MSI]: The type of build environment to bootstrap
+  for. DEVEL sets up a standard development environment on the current
+  machine. MSI sets up a "production" environment on the Minnesota
+  Supercomputing Institute servers. Default=DEVEL.
+
+  If --env=MSI, the following are also set:
+
+     --opt
+     --platform=ARGOS
+     --robot=FOOTBOT
+
+--robot [ETURTLEBOT3,FOOTBOT]: The type of robot to build for. FOOTBOT is the
+  standard ARGoS foot-bot. ETURTLEBOT3 is the standard turtlebot3 burger,
+  augmented with additional sensors to make it more useful. Default=FOOTBOT.
+
+--titerra: Clone and setup SIERRA+TITERRA in addition to compiled code.
+
+-f|--force: Don't prompt before executing the bootstrap (the configuration
+ summary is still shown).
 
 -h|--help: Show this message.
 EOF
@@ -35,16 +58,30 @@ if [ $(id -u) = 0 ]; then
     exit 1
 fi
 
-install_sys_pkgs="YES"
+install_sys_pkgs="NO"
 sys_install_prefix=$HOME/.local/system
 research_install_prefix=$HOME/.local
 research_root=$HOME/research
-platform=ARGOS
+platform="ARGOS"
 do_prompt="YES"
+do_titerra="NO"
 build_type="DEV"
-env_type="devel"
+build_env="DEVEL"
+robot="FOOTBOT"
+er_level="ALL"
+declare -A configured_branches=([rcsw]=devel
+                                [rcppsw]=devel
+                                [argos]=devel
+                                [eepuck3D]=devel
+                                [cosm]=devel
+                                [fordyca]=devel
+                                [sierra]=devel
+                                [titerra]=devel
+                                [fordyca_rosbridge]=devel
+                                [sierra_rosbridge]=devel
+                               )
 
-options=$(getopt -o hf --long help,opt,nosyspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:  -n "BOOTSTRAP" -- "$@")
+options=$(getopt -o hf --long help,opt,syspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,titerra,branch:,er:  -n "BOOTSTRAP" -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$options"
@@ -52,25 +89,52 @@ while true; do
     case "$1" in
         -h|--help) usage;;
         -f|--force) do_prompt="NO";;
-        --nosyspkgs) install_sys_pkgs="NO";;
+        --syspkgs) install_sys_pkgs="YES";;
         --opt) build_type="OPT";;
         --sysprefix) sys_install_prefix=$2; shift;;
         --rprefix) research_install_prefix=$2; shift;;
         --rroot) research_root=$2; shift;;
         --platform) platform=$2; shift;;
-        --env) env_type=$2; shift;;
+        --env) build_env=$2; shift;;
+        --er) er_level=$2; shift;;
+        --branch) branches=$2; shift;;
+        --robot) robot=$2; shift;;
+        --titerra) do_titerra="YES";;
         --) break;;
         *) break;;
     esac
     shift;
 done
 
+# Set options when bootstraping on MSI
+if [ "MSI" = "$build_env" ]; then
+    if [ -z "${SWARMROOT}" ]; then
+        . /home/gini/shared/swarm/bin/msi-env-setup.sh
+    fi
+
+    build_type="OPT"
+    platform=ARGOS
+    sys_install_prefix=$SWARMROOT/$MSIARCH
+fi
+
 # set -x
 
+# Configure branches to checkout
+declare -A branch_overrides;
+for pair in ${branches[@]}; do
+    IFS=':' read -ra PARSED <<< "$pair"
+    branch_overrides[${PARSED[0]}]=${PARSED[1]}
+done
+
+for KEY in "${!branch_overrides[@]}";
+do
+    configured_branches[$KEY]=${branch_overrides[$KEY]};
+done
+
 ################################################################################
-# Functions
+# Main Functions
 ################################################################################
-function bootstrap_main() {
+function install_packages() {
     # Install system packages
     if [ "YES" = "$install_sys_pkgs" ]; then
         libra_pkgs_core=(make
@@ -124,7 +188,7 @@ function bootstrap_main() {
             sudo apt-get -my install $pkg
         done
 
-        if [ "$env_type" = "devel" ]; then
+        if [ "$build_env" = "DEVEL" ]; then
             # Install extra development packages (must be loop to ignore
             # ones that don't exist).
             for pkg in "${libra_pkgs_devel[@]} ${rcppsw_pkgs_devel[@]} ${cosm_pkgs_devel[@]}"
@@ -136,7 +200,7 @@ function bootstrap_main() {
 
 
 
-    if [ "$env_type" = "devel" ]; then
+    if [ "$build_env" = "DEVEL" ]; then
         python_pkgs_devel=(
             # RCPPSW packages
             cpplint
@@ -152,6 +216,57 @@ function bootstrap_main() {
         )
         pip3 install --user  "${python_pkgs_core[@]}"
     fi
+}
+
+function build_repos() {
+    # Now that all system packages are installed, build all repos
+    bootstrap_dir=$(pwd)
+    mkdir -p $research_root && cd $research_root
+
+    rcppsw_args=$([ "ROS" = "$platform" ] && echo "-DRCPPSW_AL_MT_SAFE_TYPES=NO" || echo "-DRCPPSW_AL_MT_SAFE_TYPES=YES")
+
+    # Turtlebot actually has 4 cores, but not enough memory to be able
+    # to do parallel compilation.
+    n_cores=$([ "turtlebot" = "$robot" ] && echo "-DN_CORES=1" || echo "")
+
+    set -x
+    cmake \
+        -DRESEARCH_DEPS_PREFIX=$sys_install_prefix \
+        -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
+        -DRCSW_BRANCH=${configured_branches[rcsw]} \
+        -DRCPPSW_BRANCH=${configured_branches[rcppsw]} \
+        -DCOSM_BRANCH=${configured_branches[cosm]} \
+        -DARGOS_BRANCH=${configured_branches[argos]} \
+        -DFORDYCA_BRANCH=${configured_branches[fordyca]} \
+        -DLIBRA_ER=$er_level \
+        -DLIBRA_DEPS_PREFIX=$sys_install_prefix \
+        -DCMAKE_BUILD_TYPE=$build_type \
+        -DCOSM_BUILD_FOR=${platform}_${robot} \
+        -DCOSM_BUILD_ENV=$build_env \
+        $n_cores \
+        $rcppsw_args \
+        $bootstrap_dir
+
+    # Use verbose make by default, to make debugging bad include paths,
+    # etc. easier without having to re-run.
+    make VERBOSE=1
+
+
+    if [ "$platform" = "ROS" ]; then
+        rm -rf $research_root/rosbridge
+        mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
+        git clone -b ${configured_branches[sierra_rosbridge]} https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
+        git clone -b ${configured_branches[fordyca_rosbridge]} https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
+        catkin init
+        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
+        catkin build
+    fi
+
+}
+
+function bootstrap_main() {
+    install_packages
+
     export PATH=$PATH:$HOME/.local/bin
 
     # Exit when any command after this fails. Can't be before the package
@@ -160,37 +275,40 @@ function bootstrap_main() {
     # to satisfy project requirements).
     set -e
 
-    # Now that all system packages are installed, build all repos
-    bootstrap_dir=$(pwd)
-    mkdir -p $research_root && cd $research_root
 
-    er=$([ "OPT" = "$build_type" ] && echo "NONE" || echo "ALL")
-    rcppsw_args=$([ "turtlebot" = "$env_type" ] && echo "-DRCPPSW_AL_MT_SAFE_TYPES=NO" || echo "")
+    # Build all configured repos
+    build_repos
 
-    # Turtlebot actually has 4 cores, but not enough memory to be able
-    # to do parallel compilation. 
-    n_cores=$([ "turtlebot" = "$env_type" ] && echo "-DN_CORES=1" || echo "")
+    # All packages built--perform final tweaks
+    if [ "$build_env" = "MSI" ]; then
+        if [ -L $SWARMROOT/bin/argos3-$MSIARCH ]; then
+            rm -rf $SWARMROOT/bin/argos3-$MSIARCH
+        fi
+        ln -s  $SWARMROOT/$MSIARCH/bin/argos3 $SWARMROOT/bin/argos3-$MSIARCH
+    fi
 
-    cmake \
-        -DPLATFORM=$platform \
-        -DRESEARCH_DEPS_PREFIX=$sys_install_prefix \
-        -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
-        -DLIBRA_ER=$er \
-        -DCMAKE_BUILD_TYPE=$build_type \
-        $n_cores \
-        $rcppsw_args \
-        $bootstrap_dir
+    if [ "$do_titerra" = "YES" ]; then
+        cd $research_root
 
-    make
+        # Clone SIERRA
+        if [ -d sierra ]; then rm -rf sierra; fi
+        git clone https://github.com/swarm-robotics/sierra.git
+        cd sierra
+        git checkout ${configured_branches[sierra]}
+        pip3 install -r docs/requirements.txt
+        cd docs && make man && cd ..
+        pip3 install .
+        cd ..
 
-    if [ "$platform" = "ROS" ]; then
-        rm -rf $research_root/rosbridge
-        mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
-         git clone -b devel https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
-        git clone -b devel https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
-        catkin init
-        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
-        catkin build
+        # Clone TITERRA plugin
+        if [ -d titerra ]; then rm -rf titerra; fi
+        git clone https://github.com/swarm-robotics/titerra.git
+        cd titerra
+        git checkout ${configured_branches[titerra]}
+        pip3 install -r docs/requirements.txt
+        cd docs && make man && cd ..
+        pip3 install .
+        cd ..
     fi
 
     # Made it!
@@ -200,6 +318,8 @@ function bootstrap_main() {
 }
 
 function bootstrap_prompt() {
+    branches=$(for K in "${!configured_branches[@]}"; do echo -n "$K -> ${configured_branches[$K]},\n"; done)
+    branches=$(tabs 43; echo -ne $branches | sed -e "s|^|\t|g")
 
     echo -e "********************************************************************************"
     echo -e "Bootstrap Configuration Summary:"
@@ -207,31 +327,36 @@ function bootstrap_prompt() {
     echo -e ""
     echo -e ""
     echo -e "Install .deb packages                    : $install_sys_pkgs"
+    echo -e "Build environment setup                  : $build_env"
     echo -e "Clone repos to                           : $research_root"
+    echo -e "Checkout branches                        : SEE BELOW"
+    echo -e "$branches"
     echo -e "Install compiled dependencies to         : $sys_install_prefix"
     echo -e "Install compiled research projects to    : $research_install_prefix"
     echo -e "Platform                                 : $platform"
-    echo -e "Environment setup                        : $env_type"
+    echo -e "Robot                                    : $robot"
     echo -e "Build type                               : $build_type"
+    echo -e "Event reporting level                    : $er_level"
+    echo -e "Setup TITERRA                            : $do_titerra"
+
     echo -e ""
     echo -e ""
     echo -e "********************************************************************************"
 
-    while true; do
-        echo "Please verify the above configuration."
-        echo "WARNING: Anything in the installation directories may be overwritten!"
-        read -p "Execute bootstrap (yes/no)? " yn
+    if [ "$do_prompt" = "YES" ]; then
+        while true; do
+            echo "Please verify the above configuration."
+            echo "WARNING: Anything in the installation directories may be overwritten!"
+            read -p "Execute bootstrap (yes/no)? " yn
 
-        case $yn in
-            [Yy]* ) bootstrap_main; break;;
-            [Nn]* ) exit;;
-            * ) echo "Please answer yes or no.";;
-        esac
-    done
+            case $yn in
+                [Yy]* ) break;;
+                [Nn]* ) exit;;
+                * ) echo "Please answer yes or no.";;
+            esac
+        done
+    fi
 }
 
-if [ "$do_prompt" = "YES" ]; then
-    bootstrap_prompt
-else
-    bootstrap_main
-fi
+bootstrap_prompt
+bootstrap_main

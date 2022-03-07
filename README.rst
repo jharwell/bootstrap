@@ -11,7 +11,9 @@ Assumptions
   modify the script to work on your target platform and/or probably have to
   build a **LOT** more stuff from source manually.
 
-- You have sudo privileges on the machine you want to install the project on.
+- You either have sudo privileges on the machine you want to install the project
+  on, or all of the necessary development packages/software have already been
+  installed by your sysadmin.
 
 If either of these conditions are not met, you will be on your own for
 getting things setup in your development environment of choice.
@@ -27,14 +29,23 @@ Bootstrap A Debug Build
 
      ./bootstrap.sh --help
 
+#. Read the previous step again and **DO IT**. Seriously. It'll make everything
+   else less mysterious and reduce your chances of errors.
+
 #. Run the bootstrap script (it can be run from anywhere).  The default values
    of the arguments should be OK for most use cases.  If you are bootstrapping
    for ROS, make sure you source the appropriate ``setup.bash`` file before
    running the bootstrap or it will fail.
 
+   .. IMPORTANT::
+
+      When the script asks to you check the configuration before running, **DO
+      IT**, ESPECIALLY if you are setting up multiple variations on the same
+      machine, in order to avoid having in-progress work deleted or overwritten.
+
    Example usage::
 
-     ./bootstrap.sh  > output.txt 2>&1
+     ./bootstrap.sh --syspkgs  > output.txt 2>&1
 
    This will install system packages, setup your development environment under
    ``$HOME/research``, install dependencies such as ARGoS to
@@ -50,8 +61,8 @@ Bootstrap A Debug Build
    worked. Otherwise look in the ``output.txt`` for the error and fix it and try
    running the script again (the script **should** be idempotent).
 
-Optimized Build
----------------
+Bootstrap An Optimized Build
+----------------------------
 
 If you want to build an optimized version of the libraries (necessary for large
 swarms), make sure you pass ``--opt`` to the ``bootstrap.sh`` script, as it is

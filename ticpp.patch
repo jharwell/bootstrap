@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 2ab1637..b82002f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -77,3 +77,12 @@ install(TARGETS ticpp_ticpp
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}
+     ${excludeFromAllTag}
+ )
++
++install(
++  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
++  DESTINATION ${CMAKE_INSTALL_PREFIX}/include/ticpp
++  FILES_MATCHING PATTERN "*.h"
++  PATTERN "*.git" EXCLUDE
++  PATTERN "build" EXCLUDE
++  PATTERN "tests" EXCLUDE
++  )
