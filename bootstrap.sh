@@ -27,10 +27,11 @@ Usage: $0 [option]... [-h|--help]
   checked out for the specified repo.  Pass --branch multiple times to
   configure specific repos. Default=devel for all.
 
---env [DEVEL,MSI]: The type of build environment to bootstrap
+--env [DEVEL,MSI,ROBOT]: The type of build environment to bootstrap
   for. DEVEL sets up a standard development environment on the current
   machine. MSI sets up a "production" environment on the Minnesota
-  Supercomputing Institute servers. Default=DEVEL.
+  Supercomputing Institute servers. ROBOT sets things up for a
+  robot. Default=DEVEL.
 
   If --env=MSI, the following are also set:
 
@@ -41,8 +42,6 @@ Usage: $0 [option]... [-h|--help]
 --robot [ETURTLEBOT3,FOOTBOT]: The type of robot to build for. FOOTBOT is the
   standard ARGoS foot-bot. ETURTLEBOT3 is the standard turtlebot3 burger,
   augmented with additional sensors to make it more useful. Default=FOOTBOT.
-
---titerra: Clone and setup SIERRA+TITERRA in addition to compiled code.
 
 -f|--force: Don't prompt before executing the bootstrap (the configuration
  summary is still shown).
@@ -64,7 +63,6 @@ research_install_prefix=$HOME/.local
 research_root=$HOME/research
 platform="ARGOS"
 do_prompt="YES"
-do_titerra="NO"
 build_type="DEV"
 build_env="DEVEL"
 robot="FOOTBOT"
@@ -81,7 +79,7 @@ declare -A configured_branches=([rcsw]=devel
                                 [sierra_rosbridge]=devel
                                )
 
-options=$(getopt -o hf --long help,opt,syspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,titerra,branch:,er:  -n "BOOTSTRAP" -- "$@")
+options=$(getopt -o hf --long help,opt,syspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,branch:,er:  -n "BOOTSTRAP" -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$options"
@@ -99,7 +97,6 @@ while true; do
         --er) er_level=$2; shift;;
         --branch) branches=$2; shift;;
         --robot) robot=$2; shift;;
-        --titerra) do_titerra="YES";;
         --) break;;
         *) break;;
     esac
@@ -136,6 +133,9 @@ done
 ################################################################################
 function install_packages() {
     # Install system packages
+    #
+    # Core pkgs=those needed in all build environments.
+    # Devel pkgs=those only needed for development.
     if [ "YES" = "$install_sys_pkgs" ]; then
         libra_pkgs_core=(make
                          cmake
@@ -143,20 +143,27 @@ function install_packages() {
                          ccache
                          gcc-9
                          g++-9
-                         gcc-9-arm-linux-gnueabihf
-                         g++-9-arm-linux-gnueabihf
                         )
+        libra_pkgs_devel=(
+            # For testing ARM cross-compilation
+            gcc-9-arm-linux-gnueabihf
+            g++-9-arm-linux-gnueabihf
 
-        libra_pkgs_devel=(nodejs
-                          npm
-                          graphviz
-                          doxygen
-                          cppcheck
-                          libclang-10-dev
-                          clang-tools-10
-                          clang-format-10
-                          clang-tidy-10
-                         )
+            # For chrooting into an ARM image
+            qemu
+            qemu-user-static
+            binfmt-support
+            systemd-container
+
+            npm
+            graphviz
+            doxygen
+            cppcheck
+            libclang-10-dev
+            clang-tools-10
+            clang-format-10
+            clang-tidy-10
+        )
 
         rcppsw_pkgs_core=(libboost-all-dev
                           liblog4cxx-dev
@@ -165,16 +172,18 @@ function install_packages() {
                          )
 
         cosm_pkgs_core=(ros-noetic-ros-base
+                        ros-noetic-turtlebot3-bringup
+                        ros-noetic-turtlebot3-msgs
                        )
 
         cosm_pkgs_devel=(qtbase5-dev
-                        libfreeimageplus-dev
-                        freeglut3-dev
-                        libeigen3-dev
-                        libudev-dev
-                        ros-noetic-desktop-full
-                        liblua5.3-dev
-                       )
+                         libfreeimageplus-dev
+                         freeglut3-dev
+                         libeigen3-dev
+                         libudev-dev
+                         ros-noetic-desktop-full
+                         liblua5.3-dev
+                        )
 
         # Modern cmake required, default with most ubuntu versions is too
         # old--use kitware PPA.
@@ -227,7 +236,7 @@ function build_repos() {
 
     # Turtlebot actually has 4 cores, but not enough memory to be able
     # to do parallel compilation.
-    n_cores=$([ "turtlebot" = "$robot" ] && echo "-DN_CORES=1" || echo "")
+    n_cores=$([ "ETURTLEBOT3" = "$robot" ] && echo "-DN_CORES=1" || echo "")
 
     set -x
     cmake \
@@ -255,39 +264,21 @@ function build_repos() {
     if [ "$platform" = "ROS" ]; then
         rm -rf $research_root/rosbridge
         mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
+
         git clone -b ${configured_branches[sierra_rosbridge]} https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
         git clone -b ${configured_branches[fordyca_rosbridge]} https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
+
+        # Turtlebot actually has 4 cores, but not enough memory to be able
+        # to do parallel compilation.
+        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && echo "-j 1" || echo "")
+
         catkin init
         catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
-        catkin build
+        catkin build $n_cores
     fi
 
-}
 
-function bootstrap_main() {
-    install_packages
-
-    export PATH=$PATH:$HOME/.local/bin
-
-    # Exit when any command after this fails. Can't be before the package
-    # installs, because it is not an error if some of the packages are not found
-    # (I just put a list of possible packages that might exist on debian systems
-    # to satisfy project requirements).
-    set -e
-
-
-    # Build all configured repos
-    build_repos
-
-    # All packages built--perform final tweaks
-    if [ "$build_env" = "MSI" ]; then
-        if [ -L $SWARMROOT/bin/argos3-$MSIARCH ]; then
-            rm -rf $SWARMROOT/bin/argos3-$MSIARCH
-        fi
-        ln -s  $SWARMROOT/$MSIARCH/bin/argos3 $SWARMROOT/bin/argos3-$MSIARCH
-    fi
-
-    if [ "$do_titerra" = "YES" ]; then
+    if [ "$build_env" = "DEVEL" ]; then
         cd $research_root
 
         # Clone SIERRA
@@ -310,6 +301,51 @@ function bootstrap_main() {
         pip3 install .
         cd ..
     fi
+}
+
+function configure_build_env_post_build() {
+    if [ "$build_env" = "MSI" ]; then
+        if [ -L $SWARMROOT/bin/argos3-$MSIARCH ]; then
+            rm -rf $SWARMROOT/bin/argos3-$MSIARCH
+        fi
+        ln -s  $SWARMROOT/$MSIARCH/bin/argos3 $SWARMROOT/bin/argos3-$MSIARCH
+    fi
+}
+
+function configure_build_env_pre_build() {
+    # Update turtlebot firmware; the version that comes on the latest version
+    # silently doesn't work with the latest turtlebot3_msgs which comes from the
+    # ubuntu repos.
+    if [ "$build_env" = "ROBOT" ] && [ "$robot" = "ETURTLEBOT3" ]; then
+        export OPENCR_PORT=/dev/ttyACM0
+        export OPENCR_MODEL=burger_noetic
+        wget https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
+        tar -xvf opencr_update.tar.bz2
+        cd ./opencr_update
+        ./update.sh $OPENCR_PORT $OPENCR_MODEL.opencr
+        cd ..
+    fi
+}
+function bootstrap_main() {
+    # Install all packages
+    install_packages
+
+    export PATH=$PATH:$HOME/.local/bin
+
+    # Exit when any command after this fails. Can't be before the package
+    # installs, because it is not an error if some of the packages are not found
+    # (I just put a list of possible packages that might exist on debian systems
+    # to satisfy project requirements).
+    set -e
+
+    # Do pre-build per-build environment configuration.
+    configure_build_env_pre_build
+
+    # Build all configured repos
+    build_repos
+
+    # Do post-build per-build environment configuration.
+    configure_build_env_post_build
 
     # Made it!
     echo -e "********************************************************************************"
@@ -327,17 +363,16 @@ function bootstrap_prompt() {
     echo -e ""
     echo -e ""
     echo -e "Install .deb packages                    : $install_sys_pkgs"
-    echo -e "Build environment setup                  : $build_env"
     echo -e "Clone repos to                           : $research_root"
     echo -e "Checkout branches                        : SEE BELOW"
     echo -e "$branches"
     echo -e "Install compiled dependencies to         : $sys_install_prefix"
     echo -e "Install compiled research projects to    : $research_install_prefix"
+    echo -e "Build environment setup                  : $build_env"
     echo -e "Platform                                 : $platform"
     echo -e "Robot                                    : $robot"
     echo -e "Build type                               : $build_type"
     echo -e "Event reporting level                    : $er_level"
-    echo -e "Setup TITERRA                            : $do_titerra"
 
     echo -e ""
     echo -e ""
