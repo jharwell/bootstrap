@@ -1,0 +1,30 @@
+---
+ - name: Playbook to install RCPPSW dependencies
+   hosts: all
+   become: true
+   tasks:
+    - name: Install RCPPSW packages
+      apt:
+        pkgs:
+          - libboost-all-dev
+          - liblog4cxx-dev
+        state: latest
+        update_cache: true
+
+ - name: Playbook to install RCPPSW dependencies for development
+   hosts: [develservers]
+   become: true
+   tasks:
+    - name: Install RCPPSW apt packages
+      apt:
+        pkgs:
+          - catch
+        state: latest
+        update_cache: true
+
+    - name: Install RCPPSW pip packages
+      pip: name={{ item }} state=present
+      with_items:
+        - cpplint
+        - breathe
+        - exhale

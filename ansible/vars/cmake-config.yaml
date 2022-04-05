@@ -1,0 +1,5 @@
+---
+
+# if you're running your own apt mirrors, this is where you want to set those
+cmake_gpg_key_url: https://apt.kitware.com/keys/kitware-archive-latest.asc
+cmake_repository_url: http://apt.kitware.com/ubuntu

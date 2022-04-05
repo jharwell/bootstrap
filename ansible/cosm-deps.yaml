@@ -1,0 +1,37 @@
+---
+ - name: Playbook to install COSM dependencies
+   become: true
+   hosts: all
+   tasks:
+     - name: Add ROS1 sources
+       include: tasks/ros1-add-apt-sources.yaml
+
+     - name: Install ROS 1 via apt
+       apt:
+         pkgs:
+           - ros-{{ ros1_distro }}-ros-base
+           - ros-{{ ros1_distro }}-turtlebot3-bringup
+           - ros-{{ ros1_distro }}-turtlebot3-msgs
+           - qtbase5-dev
+           - libfreeimageplus-dev
+           - freeglut3-dev
+           - libeigen3-dev
+           - libudev-dev
+           - liblua5.3-dev
+         state: latest
+         update_cache: true
+     - name: Install COSM pip packages
+       pip: name={{ item }} state=present
+       with_items:
+         - catkin_tools
+
+ - name: Playbook to install COSM dependencies for development
+   hosts: [develservers]
+   become: true
+   tasks:
+     - name: Install ROS 1 via apt
+       apt:
+         pkgs:
+           - ros-{{ ros1_distro }}-ros-desktop-full
+         state: latest
+         update_cache: true

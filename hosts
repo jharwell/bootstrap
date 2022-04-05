@@ -1,0 +1,9 @@
+[robots]
+turtlebot0.local
+turtlebot1.local
+turtlebot2.local
+
+[develservers]
+#73.24.26.227 # zin
+10.0.0.10 #zin
+regula

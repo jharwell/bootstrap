@@ -1,0 +1,48 @@
+---
+ - name: Playbook to install LIBRA dependencies
+   hosts: all
+   become: true
+   tasks:
+    - name: Add cmake sources
+      include: tasks/cmake-add-apt-sources.yaml
+      
+    - name: Install LIBRA packages
+      apt:
+        pkgs:
+          - make
+          - cmake
+          - git
+          - ccache
+          - gcc-9
+          - g++-9
+        state: latest
+        update_cache: true
+
+ - name: Playbook to install LIBRA dependencies for development
+   hosts: [develservers]
+   become: true
+   tasks:
+    - name: Install LIBRA packages
+      apt:
+        pkgs:
+          # For testing ARM cross-compilation
+          - gcc-9-arm-linux-gnueabihf
+          - g++-9-arm-linux-gnueabihf
+
+          # For chrooting into an ARM image
+          - qemu
+          - qemu-user-static
+          - binfmt-support
+          - systemd-container
+
+          - npm
+          - graphviz
+          - doxygen
+          - cppcheck
+          - libclang-10-dev
+          - clang-tools-10
+          - clang-format-10
+          - clang-tidy-10
+
+        state: latest
+        update_cache: true

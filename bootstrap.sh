@@ -168,21 +168,24 @@ function install_packages() {
         rcppsw_pkgs_core=(libboost-all-dev
                           liblog4cxx-dev
                           catch
-                          python3-pip
+                         )
+        rcppsw_pkgs_devel=(libboost-all-dev
+                          liblog4cxx-dev
                          )
 
         cosm_pkgs_core=(ros-noetic-ros-base
                         ros-noetic-turtlebot3-bringup
                         ros-noetic-turtlebot3-msgs
+                        qtbase5-dev
+                        libfreeimageplus-dev
+                        freeglut3-dev
+                        libeigen3-dev
+                        libudev-dev
+                        liblua5.3-dev
                        )
 
-        cosm_pkgs_devel=(qtbase5-dev
-                         libfreeimageplus-dev
-                         freeglut3-dev
-                         libeigen3-dev
-                         libudev-dev
+        cosm_pkgs_devel=(
                          ros-noetic-desktop-full
-                         liblua5.3-dev
                         )
 
         # Modern cmake required, default with most ubuntu versions is too
@@ -324,6 +327,10 @@ function configure_build_env_pre_build() {
         cd ./opencr_update
         ./update.sh $OPENCR_PORT $OPENCR_MODEL.opencr
         cd ..
+
+        # Build will max out memory without this and get killed by the
+        # OOM reaper.
+        sudo apt-get install dphys-swapfile
     fi
 }
 function bootstrap_main() {
