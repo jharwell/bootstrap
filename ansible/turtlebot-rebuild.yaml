@@ -1,0 +1,81 @@
+---
+ - name: Pull project updates
+   hosts: [turtlebots]
+   tasks:
+     - name: Pull and rebase RCSW
+       git:
+         repo: https://github.com/swarm-robotics/rcsw.git
+         dest: /home/jharwell/research/rcsw
+         update: yes
+         version: devel
+
+     - name: Pull and rebase RCPPSW
+       git:
+         repo: https://github.com/swarm-robotics/rcppsw.git
+         dest: /home/jharwell/research/rcppsw
+         update: yes
+         version: devel
+
+     - name: Pull and rebase COSM
+       git:
+         repo: https://github.com/swarm-robotics/cosm.git
+         dest: /home/jharwell/research/cosm
+         update: yes
+         version: bugfix/177/ROS-multirobot-bringup-failure
+
+     - name: Pull and rebase FORDYCA
+       git:
+         repo: https://github.com/swarm-robotics/fordyca.git
+         dest: /home/jharwell/research/fordyca
+         update: yes
+         version: devel
+
+     - name: Pull and rebase SIERRA ROSbridge
+       git:
+         repo: https://github.com/swarm-robotics/sierra_rosbridge.git
+         dest: /home/jharwell/research/rosbridge/src/sierra_rosbridge
+         update: yes
+         version: devel
+
+     - name: Pull and rebase FORDYCA ROSbridge
+       git:
+         repo: https://github.com/swarm-robotics/fordyca_rosbridge.git
+         dest: /home/jharwell/research/rosbridge/src/fordyca_rosbridge
+         update: yes
+         version: devel
+
+
+ - name: Rebuild project code
+   hosts: [turtlebots]
+   tasks:
+     - name: Rebuild RCSW
+       make:
+         chdir: /home/jharwell/research/rcsw/build
+         target: install
+
+     - name: Rebuild RCPPSW
+       make:
+         chdir: /home/jharwell/research/rcppsw/build
+         target: install
+
+     # - name: Rebuild COSM
+     #   make:
+     #     chdir: /home/jharwell/research/cosm/build
+     #     target: install
+
+     - name: Rebuild FORDYCA
+       make:
+         chdir: /home/jharwell/research/fordyca/build
+         target: install
+
+     - name: Update .bashrc
+       lineinfile:
+         path: $HOME/.bashrc
+         insertbefore: BOF
+         line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
+
+
+     - name: Rebuild ROSBridge
+       shell: cd /home/jharwell/research/rosbridge && catkin build
+       args:
+         executable: /bin/bash

@@ -1,5 +1,8 @@
 #!/bin/bash
 #
+################################################################################
+# Configure Arguments
+################################################################################
 usage() {
     cat << EOF >&2
 Usage: $0 [option]... [-h|--help]
@@ -49,6 +52,14 @@ Usage: $0 [option]... [-h|--help]
 -h|--help: Show this message.
 EOF
     exit 1
+}
+
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+function command_failed() {
+    printf "${RED}-- The previous command failed --\n${NC}"
 }
 
 # Make sure script was not run as root or with sudo
@@ -167,11 +178,9 @@ function install_packages() {
 
         rcppsw_pkgs_core=(libboost-all-dev
                           liblog4cxx-dev
-                          catch
                          )
-        rcppsw_pkgs_devel=(libboost-all-dev
-                          liblog4cxx-dev
-                         )
+        rcppsw_pkgs_devel=(catch
+                          )
 
         cosm_pkgs_core=(ros-noetic-ros-base
                         ros-noetic-turtlebot3-bringup
@@ -184,8 +193,7 @@ function install_packages() {
                         liblua5.3-dev
                        )
 
-        cosm_pkgs_devel=(
-                         ros-noetic-desktop-full
+        cosm_pkgs_devel=(ros-noetic-desktop-full
                         )
 
         # Modern cmake required, default with most ubuntu versions is too
@@ -197,7 +205,9 @@ function install_packages() {
         # Install core packages (must be loop to ignore ones that don't exist).
         for pkg in "${libra_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]}"
         do
-            sudo apt-get -my install $pkg
+            printf "${BLUE}****************************************\n${NC}"
+            printf "${BLUE}-- ${pkg} ${NC}\n"
+            sudo apt-get install $pkg -my || command_failed
         done
 
         if [ "$build_env" = "DEVEL" ]; then
@@ -205,7 +215,9 @@ function install_packages() {
             # ones that don't exist).
             for pkg in "${libra_pkgs_devel[@]} ${rcppsw_pkgs_devel[@]} ${cosm_pkgs_devel[@]}"
             do
-                sudo apt-get -my install $pkg
+                printf "${BLUE}****************************************\n${NC}"
+                printf "${BLUE}-- ${pkg} ${NC}\n"
+                sudo apt-get install $pkg -my || command_failed
             done
         fi
     fi
@@ -239,7 +251,7 @@ function build_repos() {
 
     # Turtlebot actually has 4 cores, but not enough memory to be able
     # to do parallel compilation.
-    n_cores=$([ "ETURTLEBOT3" = "$robot" ] && echo "-DN_CORES=1" || echo "")
+    n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DN_CORES=1" || echo "")
 
     set -x
     cmake \

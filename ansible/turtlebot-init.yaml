@@ -1,0 +1,23 @@
+---
+ - name: Configure turtlebot build environment
+   hosts: [turtlebots]
+   tasks:
+     - name: Download OpenCR firmware
+       get_url:
+          url: https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
+          dest: /tmp/opencr_update.tar.bz2
+
+     - name: Extract new OpenCR firmware
+       unarchive:
+         src: /tmp/opencr_update.tar.bz2
+         dest: /tmp/
+         remote_src: yes
+
+     - name: Update OpenCR firmware
+       shell: cd /tmp/opencr_update && ./update.sh /dev/ttyACM0 burger_noetic.opencr
+
+     - name: Install apt packages
+       apt:
+         pkg:
+           - dphys-swapfile
+         state: latest
