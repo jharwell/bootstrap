@@ -4,13 +4,12 @@ cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
 include(ExternalProject)
 
-include(ProcessorCount)
-
 # Unless overriden, compile with all the cores available on the host machine.
-if(NOT DEFINED N_CORES)
-  ProcessorCount(N_CORES)
+if(NOT DEFINED PARALLEL_LEVEL)
+  include(ProcessorCount)
+  ProcessorCount(PARALLEL_LEVEL)
 endif()
-message(STATUS "Building with ${N_CORES} cores")
+message(STATUS "Building with ${PARALLEL_LEVEL} cores")
 
 ################################################################################
 # Setup Prefixes
@@ -41,7 +40,7 @@ ExternalProject_Add(rcsw
   GIT_TAG ${RCSW_BRANCH}
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${RESEARCH_INSTALL_PREFIX} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
   UPDATE_COMMAND mkdir -p build
-  BUILD_COMMAND make all -j ${N_CORES}
+  BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
   SOURCE_DIR rcsw
   BINARY_DIR rcsw/build
   )
@@ -93,7 +92,7 @@ ExternalProject_Add(ticpp
   -DCMAKE_INSTALL_PREFIX=${RESEARCH_DEPS_PREFIX}
   ..
   PATCH_COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ticpp.patch || true
-  BUILD_COMMAND make all -j ${N_CORES} CFLAGS="-fPIC"
+  BUILD_COMMAND make all -j ${PARALLEL_LEVEL} CFLAGS="-fPIC"
   SOURCE_DIR ticpp
   BINARY_DIR ticpp/build
   )
@@ -110,7 +109,7 @@ ExternalProject_Add(rcppsw
   -DLIBRA_DEPS_PREFIX=${LIBRA_DEPS_PREFIX}
   -DRCPPSW_AL_MT_SAFE_TYPES=${RCPPSW_AL_MT_SAFE_TYPES}
   UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
-  BUILD_COMMAND make all -j ${N_CORES}
+  BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
   SOURCE_DIR rcppsw
   BINARY_DIR rcppsw/build
   )
@@ -139,7 +138,7 @@ if ("${COSM_BUILD_FOR}" MATCHES "ARGOS")
     -DARGOS_WITH_LUA=OFF
     -DARGOS_INSTALL_LDSOCONF=NO
     ../src
-    BUILD_COMMAND make all -j ${N_CORES}
+    BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
     SOURCE_DIR argos
     BINARY_DIR argos/build
     )
@@ -176,7 +175,7 @@ if ("${COSM_BUILD_FOR}" MATCHES "ARGOS")
     GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
     GIT_TAG ${COSM_BRANCH}
     UPDATE_COMMAND mkdir -p build
-    BUILD_COMMAND make all -j ${N_CORES}
+    BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=${COSM_BUILD_FOR}
     -DCOSM_BUILD_ENV=${COSM_BUILD_ENV}
@@ -194,7 +193,7 @@ elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
     GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
     GIT_TAG ${COSM_BRANCH}
     UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
-    BUILD_COMMAND make all -j ${N_CORES}
+    BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=${COSM_BUILD_FOR}
     -DCOSM_BUILD_ENV=${COSM_BUILD_ENV}
@@ -228,7 +227,7 @@ if("${COSM_BUILD_ENV}" MATCHES "MSI")
     -DNLOPT_GUILE=NO
     -DNLOPT_SWIG=NO
     UPDATE_COMMAND mkdir -p build
-    BUILD_COMMAND make -j ${N_CORES}
+    BUILD_COMMAND make -j ${PARALLEL_LEVEL}
     SOURCE_DIR nlopt
     BINARY_DIR nlopt/build
     )
@@ -243,7 +242,7 @@ if("${COSM_BUILD_FOR}" MATCHES "ARGOS")
     GIT_REPOSITORY https://github.com/swarm-robotics/fordyca.git
     GIT_TAG ${FORDYCA_BRANCH}
     UPDATE_COMMAND mkdir -p build
-    BUILD_COMMAND make all -j ${N_CORES}
+    BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=${COSM_BUILD_FOR}
     -DCOSM_BUILD_ENV=${COSM_BUILD_ENV}
@@ -262,7 +261,7 @@ elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
     GIT_REPOSITORY https://github.com/swarm-robotics/fordyca.git
     GIT_TAG ${FORDYCA_BRANCH}
     UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
-    BUILD_COMMAND make all -j ${N_CORES}
+    BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
     CMAKE_ARGS
     -DCOSM_BUILD_FOR=${COSM_BUILD_FOR}
     -DCOSM_BUILD_ENV=${COSM_BUILD_ENV}

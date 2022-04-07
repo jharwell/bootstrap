@@ -4,8 +4,9 @@
    become: true
    tasks:
     - name: Add cmake sources
-      include: tasks/cmake-add-apt-sources.yaml
-      
+      include_tasks:
+        file: tasks/cmake-add-apt-sources.yaml
+
     - name: Install LIBRA packages
       apt:
         pkgs:

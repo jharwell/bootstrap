@@ -21,3 +21,21 @@
          pkg:
            - dphys-swapfile
          state: latest
+
+     # The stock .bashrc only sets this if in an interactive shell, which ssh
+     # commands are not. Needed so executables from python packages can be found.
+     - name: Update .bashrc $PATH
+       lineinfile:
+         path: $HOME/.bashrc
+         insertbefore: BOF
+         line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
+
+     - name: Lookup ROS1 config
+       ansible.builtin.include_vars:
+         file: vars/ros1-config.yaml
+
+     - name: Update .bashrc for ROS
+       lineinfile:
+         path: $HOME/.bashrc
+         insertbefore: BOF
+         line: "source /opt/ros/{{ ros1_distro }}/setup.bash"

@@ -251,7 +251,7 @@ function build_repos() {
 
     # Turtlebot actually has 4 cores, but not enough memory to be able
     # to do parallel compilation.
-    n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DN_CORES=1" || echo "")
+    n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DPARALLEL_LEVEL=1" || echo "")
 
     set -x
     cmake \
@@ -285,7 +285,7 @@ function build_repos() {
 
         # Turtlebot actually has 4 cores, but not enough memory to be able
         # to do parallel compilation.
-        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && echo "-j 1" || echo "")
+        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
 
         catkin init
         catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
@@ -327,24 +327,6 @@ function configure_build_env_post_build() {
     fi
 }
 
-function configure_build_env_pre_build() {
-    # Update turtlebot firmware; the version that comes on the latest version
-    # silently doesn't work with the latest turtlebot3_msgs which comes from the
-    # ubuntu repos.
-    if [ "$build_env" = "ROBOT" ] && [ "$robot" = "ETURTLEBOT3" ]; then
-        export OPENCR_PORT=/dev/ttyACM0
-        export OPENCR_MODEL=burger_noetic
-        wget https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
-        tar -xvf opencr_update.tar.bz2
-        cd ./opencr_update
-        ./update.sh $OPENCR_PORT $OPENCR_MODEL.opencr
-        cd ..
-
-        # Build will max out memory without this and get killed by the
-        # OOM reaper.
-        sudo apt-get install dphys-swapfile
-    fi
-}
 function bootstrap_main() {
     # Install all packages
     install_packages
@@ -356,9 +338,6 @@ function bootstrap_main() {
     # (I just put a list of possible packages that might exist on debian systems
     # to satisfy project requirements).
     set -e
-
-    # Do pre-build per-build environment configuration.
-    configure_build_env_pre_build
 
     # Build all configured repos
     build_repos
