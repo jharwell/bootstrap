@@ -1,0 +1,35 @@
+---
+ - name: Pull ROSbridge updates to nodes
+   hosts: [all]
+   tasks:
+     - name: Get repo config
+       include_vars: vars/repo-config.yaml
+
+     - name: Get turtlebot config
+       include_vars: vars/turtlebot-config.yaml
+       when: inventory_hostname in groups['turtlebots']
+
+     - name: Get develserver config
+       include_vars: vars/develserver-config.yaml
+       when: inventory_hostname in groups['develservers']
+
+     - name: Pull and rebase sierra_rosbridge
+       git:
+         repo: https://github.com/swarm-robotics/sierra_rosbridge.git
+         dest: "{{ research_root }}/rosbridge/src/sierra_rosbridge"
+         update: yes
+         version: "{{ sierra_rosbridge_branch }}"
+
+     - name: Pull and rebase fordyca_rosbridge
+       git:
+         repo: https://github.com/swarm-robotics/fordyca_rosbridge.git
+         dest: "{{ research_root }}/rosbridge/src/fordyca_rosbridge"
+         update: yes
+         version: "{{ fordyca_rosbridge_branch }}"
+
+     - name: Pull and rebase sr04us
+       git:
+         repo: https://github.com/swarm-robotics/sr04us.git
+         dest: "{{ research_root }}/rosbridge/src/sr04us"
+         update: yes
+         version: "{{ sr04us_branch }}"

@@ -1,0 +1,52 @@
+---
+ - name: Rebuild project code
+   hosts: [all]
+
+   tasks:
+     - name: Get turtlebot config
+       include_vars: vars/turtlebot-config.yaml
+       when: inventory_hostname in groups['turtlebots']
+
+     - name: Get develserver config
+       include_vars: vars/develserver-config.yaml
+       when: inventory_hostname in groups['develservers']
+
+     - name: Lookup ROS1 config
+       ansible.builtin.include_vars:
+         file: vars/ros1-config.yaml
+
+     - name: Rebuild RCSW
+       community.general.make:
+         chdir: "{{ research_root }}/rcsw/build"
+         target: install
+
+     - name: Rebuild RCPPSW
+       community.general.make:
+         jobs:  "{{ make_parallelism }}"
+         chdir: "{{ research_root }}/rcppsw/build"
+         target: install
+
+     - name: Force re-running COSM cmake
+       ansible.builtin.file:
+         path: "{{ research_root }}/cosm/CMakeLists.txt"
+         state: touch
+
+     - name: Rebuild COSM
+       community.general.make:
+         jobs:  "{{ make_parallelism }}"
+         chdir: "{{ research_root }}/cosm/build"
+         target: install
+
+     - name: Force re-running FORDYCA cmake
+       ansible.builtin.file:
+         path: "{{ research_root }}/fordyca/CMakeLists.txt"
+         state: touch
+
+     - name: Rebuild FORDYCA
+       community.general.make:
+         jobs:  "{{ make_parallelism }}"
+         chdir: "{{ research_root }}/fordyca/build"
+         target: install
+
+ - name: Rebuild ROSbridge
+   import_playbook: rosbridge-rebuild.yaml

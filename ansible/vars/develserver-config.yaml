@@ -1,3 +1,4 @@
 ---
 
 research_root: $HOME/git
+make_parallelism: "{{ ansible_processor_vcpus }}"

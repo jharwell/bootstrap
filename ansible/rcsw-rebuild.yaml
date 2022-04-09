@@ -1,0 +1,31 @@
+---
+ - name: Rebuild RCSW
+   hosts: [all]
+   tasks:
+     - name: Get turtlebot config
+       include_vars: vars/turtlebot-config.yaml
+       when: inventory_hostname in groups['turtlebots']
+
+     - name: Get develserver config
+       include_vars: vars/develserver-config.yaml
+       when: inventory_hostname in groups['develservers']
+
+     - name: Create RCSW build directory
+       ansible.builtin.file:
+         path: "{{ research_root }}/rcsw/build"
+         state: directory
+
+     - name: Run cmake for RCSW
+       shell: >
+         cd "{{ research_root }}/rcsw/build" &&
+         cmake
+         -DCMAKE_INSTALL_PREFIX="{{ research_install_prefix }}
+         -DCMAKE_BUILD_TYPE="{{ cmake_build_type }} "
+       args:
+         executable: /bin/bash
+
+     - name: Run make for RCSW
+       community.general.make:
+         jobs: "{{ make_parallelism }}"
+         chdir: "{{ research_root }}/rcsw/build"
+         target: install

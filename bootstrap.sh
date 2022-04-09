@@ -49,6 +49,7 @@ Usage: $0 [option]... [-h|--help]
 -f|--force: Don't prompt before executing the bootstrap (the configuration
  summary is still shown).
 
+-p|--purge: Remove --rroot, --reprefix, --sysprefix before bootstrapping.
 -h|--help: Show this message.
 EOF
     exit 1
@@ -78,6 +79,7 @@ build_type="DEV"
 build_env="DEVEL"
 robot="FOOTBOT"
 er_level="ALL"
+purge="NO"
 declare -A configured_branches=([rcsw]=devel
                                 [rcppsw]=devel
                                 [argos]=devel
@@ -86,11 +88,12 @@ declare -A configured_branches=([rcsw]=devel
                                 [fordyca]=devel
                                 [sierra]=devel
                                 [titerra]=devel
-                                [fordyca_rosbridge]=devel
-                                [sierra_rosbridge]=devel
+                                [rosbridge]=devel
+                                [sr04us]=devel
                                )
+cmdline_branches=()
 
-options=$(getopt -o hf --long help,opt,syspkgs,force,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,branch:,er:  -n "BOOTSTRAP" -- "$@")
+options=$(getopt -o hfp --long help,opt,syspkgs,force,purge,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,branch:,er:  -n "BOOTSTRAP" -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$options"
@@ -98,6 +101,7 @@ while true; do
     case "$1" in
         -h|--help) usage;;
         -f|--force) do_prompt="NO";;
+        -p|--purge) purge="YES";;
         --syspkgs) install_sys_pkgs="YES";;
         --opt) build_type="OPT";;
         --sysprefix) sys_install_prefix=$2; shift;;
@@ -106,7 +110,7 @@ while true; do
         --platform) platform=$2; shift;;
         --env) build_env=$2; shift;;
         --er) er_level=$2; shift;;
-        --branch) branches=$2; shift;;
+        --branch) cmdline_branches+=($2); shift;;
         --robot) robot=$2; shift;;
         --) break;;
         *) break;;
@@ -129,7 +133,7 @@ fi
 
 # Configure branches to checkout
 declare -A branch_overrides;
-for pair in ${branches[@]}; do
+for pair in ${cmdline_branches[@]}; do
     IFS=':' read -ra PARSED <<< "$pair"
     branch_overrides[${PARSED[0]}]=${PARSED[1]}
 done
@@ -237,23 +241,26 @@ function install_packages() {
     if [ "$platform" = "ROS" ]; then
         python_pkgs_core=(
             catkin_tools
+            adafruit-circuitpython-tca9548a
+            adafruit-circuitpython-tsl2591
+            adafruit-blinka
         )
         pip3 install --user  "${python_pkgs_core[@]}"
     fi
 }
 
 function build_repos() {
-    # Now that all system packages are installed, build all repos
     bootstrap_dir=$(pwd)
+    # Now that all system packages are installed, build all repos
     mkdir -p $research_root && cd $research_root
 
+    set -x
     rcppsw_args=$([ "ROS" = "$platform" ] && echo "-DRCPPSW_AL_MT_SAFE_TYPES=NO" || echo "-DRCPPSW_AL_MT_SAFE_TYPES=YES")
 
     # Turtlebot actually has 4 cores, but not enough memory to be able
     # to do parallel compilation.
     n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DPARALLEL_LEVEL=1" || echo "")
 
-    set -x
     cmake \
         -DRESEARCH_DEPS_PREFIX=$sys_install_prefix \
         -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
@@ -273,22 +280,37 @@ function build_repos() {
 
     # Use verbose make by default, to make debugging bad include paths,
     # etc. easier without having to re-run.
-    make VERBOSE=1
+    make rcppsw VERBOSE=1
 
 
+    # This is needed to be able to build COSM
     if [ "$platform" = "ROS" ]; then
-        rm -rf $research_root/rosbridge
-        mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
 
-        git clone -b ${configured_branches[sierra_rosbridge]} https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
-        git clone -b ${configured_branches[fordyca_rosbridge]} https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
+        git clone -b ${configured_branches[rosbridge]} https://github.com/swarm-robotics/rosbridge.git rosbridge
+        cd rosbridge
+        git submodule update --init --recursive --remote
 
         # Turtlebot actually has 4 cores, but not enough memory to be able
         # to do parallel compilation.
         n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
 
+        source /opt/ros/noetic/setup.bash
         catkin init
         catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
+        catkin build sr04us tsl2591 $n_cores
+
+        source $research_install_prefix/ros/setup.bash
+        cd ..
+    fi
+    make VERBOSE=1
+
+
+    # COSM is built, so we can build the entirety of the ROSbridge
+    if [ "$platform" = "ROS" ]; then
+        # Turtlebot actually has 4 cores, but not enough memory to be able
+        # to do parallel compilation.
+        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
+
         catkin build $n_cores
     fi
 
@@ -328,6 +350,12 @@ function configure_build_env_post_build() {
 }
 
 function bootstrap_main() {
+    if [ "YES" = "$purge" ]; then
+        rm -rf $research_root
+        rm -rf $research_install_prefix
+        rm -rf $sys_install_prefix
+    fi
+
     # Install all packages
     install_packages
 
