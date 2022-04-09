@@ -1,4 +1,6 @@
 ---
 
 fordyca_rosbridge_branch: devel
+rcsw_branch: devel
 sierra_rosbridge_branch: devel
+sr04us_driver_branch: devel

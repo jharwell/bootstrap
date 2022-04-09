@@ -1,41 +1,91 @@
 ---
- - name: Configure turtlebot build environment
+ - name: Initialize turtlebots
    hosts: [turtlebots]
    tasks:
-     - name: Download OpenCR firmware
-       get_url:
-          url: https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
-          dest: /tmp/opencr_update.tar.bz2
+     # - name: Download OpenCR firmware
+     #   get_url:
+     #      url: https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
+     #      dest: /tmp/opencr_update.tar.bz2
 
-     - name: Extract new OpenCR firmware
-       unarchive:
-         src: /tmp/opencr_update.tar.bz2
-         dest: /tmp/
-         remote_src: yes
+     # - name: Extract new OpenCR firmware
+     #   unarchive:
+     #     src: /tmp/opencr_update.tar.bz2
+     #     dest: /tmp/
+     #     remote_src: yes
 
-     - name: Update OpenCR firmware
-       shell: cd /tmp/opencr_update && ./update.sh /dev/ttyACM0 burger_noetic.opencr
+     # - name: Update OpenCR firmware
+     #   shell: cd /tmp/opencr_update && ./update.sh /dev/ttyACM0 burger_noetic.opencr
 
-     - name: Install apt packages
-       apt:
-         pkg:
-           - dphys-swapfile
-         state: latest
+     # # Only enabled for the ubuntu user by default.
+     # - name: Passwordless sudo
+     #   become: yes
+     #   lineinfile:
+     #     path: /etc/sudoers.d/90-cloud-init-users
+     #     insertafter: EOF
+     #     line: "jharwell ALL=(ALL) NOPASSWD:ALL"
 
-     # The stock .bashrc only sets this if in an interactive shell, which ssh
-     # commands are not. Needed so executables from python packages can be found.
-     - name: Update .bashrc $PATH
-       lineinfile:
-         path: $HOME/.bashrc
-         insertbefore: BOF
-         line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
+     # - name: Install apt packages
+     #   become: yes
+     #   apt:
+     #     pkg:
+     #       - dphys-swapfile
+     #       - libwiringpi-dev
+     #       - rpi.gpio-common
+     #     state: latest
 
-     - name: Lookup ROS1 config
-       ansible.builtin.include_vars:
-         file: vars/ros1-config.yaml
+     # # Values are 0 (use default), 1 (ignore/don't touch), 2 (disable) or 3 (enable).
+     # - name: Disable wifi power management
+     #   become: yes
+     #   lineinfile:
+     #     path: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+     #     regexp: "^wifi.powersave"
+     #     line: 'wifi.powersave = 2'
 
-     - name: Update .bashrc for ROS
-       lineinfile:
-         path: $HOME/.bashrc
-         insertbefore: BOF
-         line: "source /opt/ros/{{ ros1_distro }}/setup.bash"
+
+     # # The stock .bashrc only sets this if in an interactive shell, which ssh
+     # # commands are not. Needed so executables from python packages can be found.
+     # - name: Update .bashrc $PATH
+     #   lineinfile:
+     #     path: $HOME/.bashrc
+     #     insertbefore: BOF
+     #     line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
+
+     # - name: Lookup ROS1 config
+     #   ansible.builtin.include_vars:
+     #     file: vars/ros1-config.yaml
+
+     # - name: Update setup.bash to set ROS_HOSTNAME dynamically
+     #   lineinfile:
+     #     path: $HOME/setup.bash
+     #     regexp: "^export ROS_HOSTNAME"
+     #     line: "export ROS_HOSTNAME=$(hostname -I| tr -d '[:space:]')"
+
+     # - name: Update setup.bash to set ROS_IP dynamically
+     #   lineinfile:
+     #     path: $HOME/setup.bash
+     #     regexp: "^export ROS_IP"
+     #     line: "export ROS_IP=$(hostname -I| tr -d '[:space:]')"
+
+     # - name: Update .bashrc for ROS
+     #   lineinfile:
+     #     path: $HOME/.bashrc
+     #     insertbefore: BOF
+     #     line: "source /opt/ros/{{ ros1_distro }}/setup.bash"
+
+     - name: Clone bootstrap
+       ansible.builtin.git:
+         repo: https://github.com/swarm-robotics/bootstrap.git
+         dest: "$HOME/bootstrap"
+         update: yes
+         version: master
+
+     - name: Run bootstrap
+       shell: >
+         cd bootstrap && ./bootstrap.sh
+         --platform ROS
+         --robot ETURTLEBOT3
+         --env ROBOT
+         --force
+         --purge
+         --branch fordyca:refactor/734/COSM172-flowdown
+         --branch cosm:feature/172/extra-turtlebot-sensors

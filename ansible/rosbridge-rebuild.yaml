@@ -1,0 +1,16 @@
+---
+ - name: Rebuild ROSBridge
+   hosts: [all]
+   tasks:
+     - name: Get turtlebot config
+       include_vars: vars/turtlebot-config.yaml
+       when: inventory_hostname in groups['turtlebots']
+
+     - name: Get develserver config
+       include_vars: vars/develserver-config.yaml
+       when: inventory_hostname in groups['develservers']
+
+     - name: Rebuild ROSBridge
+       shell: cd "{{ research_root }}/rosbridge" && catkin build -j "{{ make_parallelism }}"
+       args:
+         executable: /bin/bash
