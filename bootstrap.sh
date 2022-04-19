@@ -89,7 +89,6 @@ declare -A configured_branches=([rcsw]=devel
                                 [sierra]=devel
                                 [titerra]=devel
                                 [rosbridge]=devel
-                                [sr04us]=devel
                                )
 cmdline_branches=()
 
@@ -189,6 +188,7 @@ function install_packages() {
         cosm_pkgs_core=(ros-noetic-ros-base
                         ros-noetic-turtlebot3-bringup
                         ros-noetic-turtlebot3-msgs
+                        libwiringpi-dev
                         qtbase5-dev
                         libfreeimageplus-dev
                         freeglut3-dev
@@ -261,6 +261,11 @@ function build_repos() {
     # to do parallel compilation.
     n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DPARALLEL_LEVEL=1" || echo "")
 
+    # This is needed to be able to build COSM
+    if [ "$platform" = "ROS" ]; then
+        source /opt/ros/noetic/setup.bash
+    fi
+
     cmake \
         -DRESEARCH_DEPS_PREFIX=$sys_install_prefix \
         -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
@@ -278,42 +283,22 @@ function build_repos() {
         $rcppsw_args \
         $bootstrap_dir
 
-    # Use verbose make by default, to make debugging bad include paths,
-    # etc. easier without having to re-run.
-    make rcppsw VERBOSE=1
 
-
-    # This is needed to be able to build COSM
     if [ "$platform" = "ROS" ]; then
+        # COSM needs part of the ROSbridge to be built and installed
+        # to compile, so build it first
+        make VERBOSE=1 rosbridge_drivers
 
-        git clone -b ${configured_branches[rosbridge]} https://github.com/swarm-robotics/rosbridge.git rosbridge
-        cd rosbridge
-        git submodule update --init --recursive --remote
+        # Get new ROS package/catkin definitions
+        source $research_install_prefix/setup.bash
 
-        # Turtlebot actually has 4 cores, but not enough memory to be able
-        # to do parallel compilation.
-        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
-
-        source /opt/ros/noetic/setup.bash
-        catkin init
-        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
-        catkin build sr04us tsl2591 $n_cores
-
-        source $research_install_prefix/ros/setup.bash
-        cd ..
+        # Build everything else
+        make VERBOSE=1
+    else
+        # Use verbose make by default, to make debugging bad include paths,
+        # etc. easier without having to re-run.
+        make VERBOSE=1
     fi
-    make VERBOSE=1
-
-
-    # COSM is built, so we can build the entirety of the ROSbridge
-    if [ "$platform" = "ROS" ]; then
-        # Turtlebot actually has 4 cores, but not enough memory to be able
-        # to do parallel compilation.
-        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
-
-        catkin build $n_cores
-    fi
-
 
     if [ "$build_env" = "DEVEL" ]; then
         cd $research_root

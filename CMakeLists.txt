@@ -168,9 +168,13 @@ endif()
 ################################################################################
 # COSM
 ################################################################################
+set(COSM_DEPENDS rcppsw)
+
 if ("${COSM_BUILD_FOR}" MATCHES "ARGOS")
+  set(COSM_DEPENDS ${COSM_DEPENDS} argos)
+
   ExternalProject_Add(cosm
-    DEPENDS argos rcppsw
+    DEPENDS ${COSM_DEPENDS}
     PREFIX .
     GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
     GIT_TAG ${COSM_BRANCH}
@@ -186,9 +190,26 @@ if ("${COSM_BUILD_FOR}" MATCHES "ARGOS")
     BINARY_DIR cosm/build
     )
 elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
-  # COSM with ROS
-  ExternalProject_Add(cosm
+
+  ExternalProject_Add(rosbridge_drivers
     DEPENDS rcppsw
+    PREFIX .
+    GIT_REPOSITORY https://github.com/swarm-robotics/rosbridge.git
+    GIT_TAG devel
+    UPDATE_COMMAND git submodule update --init --remote --recursive &&
+    git pull --rebase
+    CONFIGURE_COMMAND catkin init && catkin config --extend /opt/ros/noetic --install
+    --install-space=${RESEARCH_INSTALL_PREFIX} -DCMAKE_MODULE_PATH=${RESEARCH_INSTALL_PREFIX}
+    BUILD_COMMAND catkin build sr04us tsl2591 -j ${PARALLEL_LEVEL}
+    INSTALL_COMMAND ""
+    SOURCE_DIR rosbridge
+    BINARY_DIR rosbridge
+  )
+
+  # COSM with ROS
+  set(COSM_DEPENDS ${COSM_DEPENDS} rosbridge_drivers)
+  ExternalProject_Add(cosm
+    DEPENDS ${COSM_DEPENDS}
     PREFIX .
     GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
     GIT_TAG ${COSM_BRANCH}
@@ -206,7 +227,7 @@ elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
 endif()
 
 ################################################################################
-# Fordyca
+# FORDYCA
 ################################################################################
 set(FORDYCA_DEPENDS cosm)
 
@@ -271,4 +292,26 @@ elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
     SOURCE_DIR fordyca
     BINARY_DIR fordyca/build
     )
+endif()
+
+
+################################################################################
+# ROSBridge
+################################################################################
+if ("${COSM_BUILD_FOR}" MATCHES "ROS")
+
+ExternalProject_Add(rosbridge_bindings
+  DEPENDS fordyca
+  PREFIX .
+  GIT_REPOSITORY https://github.com/swarm-robotics/rosbridge.git
+  GIT_TAG devel
+  UPDATE_COMMAND git submodule update --init --remote --recursive &&
+  git pull --rebase
+  CONFIGURE_COMMAND catkin init && catkin config --extend /opt/ros/noetic --install
+  --install-space=${RESEARCH_INSTALL_PREFIX} -DCMAKE_MODULE_PATH=${RESEARCH_INSTALL_PREFIX}
+  BUILD_COMMAND catkin build -j ${PARALLEL_LEVEL}
+  INSTALL_COMMAND ""
+  SOURCE_DIR rosbridge
+  BINARY_DIR rosbridge
+)
 endif()

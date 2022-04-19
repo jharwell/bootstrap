@@ -2,51 +2,52 @@
  - name: Initialize turtlebots
    hosts: [turtlebots]
    tasks:
-     - name: Download OpenCR firmware
-       get_url:
-          url: https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
-          dest: /tmp/opencr_update.tar.bz2
+     # - name: Download OpenCR firmware
+     #   get_url:
+     #      url: https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2
+     #      dest: /tmp/opencr_update.tar.bz2
 
-     - name: Extract new OpenCR firmware
-       unarchive:
-         src: /tmp/opencr_update.tar.bz2
-         dest: /tmp/
-         remote_src: yes
+     # - name: Extract new OpenCR firmware
+     #   unarchive:
+     #     src: /tmp/opencr_update.tar.bz2
+     #     dest: /tmp/
+     #     remote_src: yes
 
-     - name: Update OpenCR firmware
-       shell: cd /tmp/opencr_update && ./update.sh /dev/ttyACM0 burger_noetic.opencr
+     # - name: Update OpenCR firmware
+     #   shell: cd /tmp/opencr_update && ./update.sh /dev/ttyACM0 burger_noetic.opencr
 
-     # Only enabled for the ubuntu user by default.
-     - name: Passwordless sudo
-       become: yes
-       lineinfile:
-         path: /etc/sudoers.d/90-cloud-init-users
-         insertafter: EOF
-         line: "jharwell ALL=(ALL) NOPASSWD:ALL"
+     # # Only enabled for the ubuntu user by default.
+     # - name: Passwordless sudo
+     #   become: yes
+     #   lineinfile:
+     #     path: /etc/sudoers.d/90-cloud-init-users
+     #     insertafter: EOF
+     #     line: "jharwell ALL=(ALL) NOPASSWD:ALL"
 
-     - name: Install apt packages
-       become: yes
-       apt:
-         pkg:
-           - dphys-swapfile
-           - libwiringpi-dev
-           - rpi.gpio-common
-         state: latest
+     # - name: Install apt packages
+     #   become: yes
+     #   apt:
+     #     pkg:
+     #       - dphys-swapfile
+     #       - libwiringpi-dev
+     #       - rpi.gpio-common
+     #       - python3-smbus
+     #     state: latest
 
-     # Values are 0 (use default), 1 (ignore/don't touch), 2 (disable) or 3 (enable).
-     - name: Disable wifi power management
-       become: yes
-       lineinfile:
-         path: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
-         regexp: "^wifi.powersave"
-         line: 'wifi.powersave = 2'
+     # # Values are 0 (use default), 1 (ignore/don't touch), 2 (disable) or 3 (enable).
+     # - name: Disable wifi power management
+     #   become: yes
+     #   lineinfile:
+     #     path: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+     #     regexp: "^wifi.powersave"
+     #     line: 'wifi.powersave = 2'
 
-     # Set ping UMN gateway 128.101.101.101
-     - name: Enable periodic ping to keep robots alive for ssh
-       ansible.builtin.cron:
-         name: "Ping UMN gateway"
-         minute: "*/5"
-         job: "ping -c 1 128.101.101.101 >/dev/null 2>&1"
+     # # Set ping UMN gateway 128.101.101.101
+     # - name: Enable periodic ping to keep robots alive for ssh
+     #   ansible.builtin.cron:
+     #     name: "Ping UMN gateway"
+     #     minute: "*/5"
+     #     job: "ping -c 1 128.101.101.101 >/dev/null 2>&1"
 
      # The stock .bashrc only sets this if in an interactive shell, which ssh
      # commands are not. Needed so executables from python packages can be found.
@@ -56,21 +57,21 @@
          insertbefore: BOF
          line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
 
+     - name: Add {{ user }} to dialout,i2c
+       user:
+         name: '{{ user }}'
+         groups: dialout,i2c
+         append: yes
+
      - name: Lookup ROS1 config
        ansible.builtin.include_vars:
          file: vars/ros1-config.yaml
 
-     - name: Update setup.bash to set ROS_HOSTNAME dynamically
-       lineinfile:
-         path: $HOME/setup.bash
-         regexp: "^export ROS_HOSTNAME"
-         line: "export ROS_HOSTNAME=$(hostname -I| tr -d '[:space:]')"
-
-     - name: Update setup.bash to set ROS_IP dynamically
-       lineinfile:
-         path: $HOME/setup.bash
-         regexp: "^export ROS_IP"
-         line: "export ROS_IP=$(hostname -I| tr -d '[:space:]')"
+     - name: Add ROS setup.bash
+       ansible.builtin.file:
+         src: ./setup.bash
+         dest: $HOME/setup.bash
+         force: yes
 
      - name: Update .bashrc for ROS
        lineinfile:

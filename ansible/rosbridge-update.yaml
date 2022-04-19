@@ -33,3 +33,10 @@
          dest: "{{ research_root }}/rosbridge/src/sr04us"
          update: yes
          version: "{{ sr04us_branch }}"
+
+     - name: Pull and rebase tsl2591
+       git:
+         repo: https://github.com/swarm-robotics/tsl2591.git
+         dest: "{{ research_root }}/rosbridge/src/tsl2591"
+         update: yes
+         version: "{{ tsl2591_branch }}"
