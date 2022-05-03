@@ -5,6 +5,10 @@
  - name: Run bootstrap
    hosts: [develservers]
    tasks:
+     - name: Add cmake sources
+       include_tasks:
+         file: tasks/cmake-add-apt-sources.yaml
+
      - name: Clone bootstrap
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/bootstrap.git

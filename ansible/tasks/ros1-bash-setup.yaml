@@ -1,8 +1,7 @@
 - name: Add ROS setup.bash
-  ansible.builtin.file:
+  copy:
     src: ./setup.bash
     dest: $HOME/setup.bash
-    force: yes
 
 - name: Update .bashrc for ROS
   lineinfile:

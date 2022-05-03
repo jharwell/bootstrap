@@ -191,6 +191,7 @@ if ("${COSM_BUILD_FOR}" MATCHES "ARGOS")
     )
 elseif ("${COSM_BUILD_FOR}" MATCHES "ROS")
 
+  # COSM depends on the ROSbridge drivers--build them first
   ExternalProject_Add(rosbridge_drivers
     DEPENDS rcppsw
     PREFIX .
@@ -296,7 +297,7 @@ endif()
 
 
 ################################################################################
-# ROSBridge
+# ROSBridge Bindings
 ################################################################################
 if ("${COSM_BUILD_FOR}" MATCHES "ROS")
 

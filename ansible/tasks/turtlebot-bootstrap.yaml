@@ -1,0 +1,29 @@
+- name: Clone TITAN bootstrap
+  ansible.builtin.git:
+    repo: https://github.com/swarm-robotics/bootstrap.git
+    dest: "$HOME/bootstrap"
+    update: yes
+    version: master
+
+- name: Init git identity email
+  community.general.git_config:
+    name: user.email
+    scope: global
+    value: '{{ ansible_user_id }}@{{ ansible_fqdn }}'
+
+- name: Init git identity name
+  community.general.git_config:
+    name: user.name
+    scope: global
+    value: '{{ ansible_user_id }}'
+
+- name: Set max cache size 1G
+  shell: ccache -M 1G
+
+- name: Run TITAN bootstrap
+  shell: >
+    cd bootstrap && ./bootstrap.sh
+    --platform ROS
+    --robot ETURTLEBOT3
+    --env ROBOT
+    --force

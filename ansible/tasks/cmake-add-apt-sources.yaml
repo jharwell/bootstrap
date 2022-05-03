@@ -1,3 +1,7 @@
+- name: Lookup desired cmake config
+  ansible.builtin.include_vars:
+    file: vars/cmake-config.yaml
+
 # sudo apt update && sudo apt install curl gnupg2 lsb-release
 - name: Install dependencies for setting up sources
   ansible.builtin.apt:

@@ -78,7 +78,7 @@ do_prompt="YES"
 build_type="DEV"
 build_env="DEVEL"
 robot="FOOTBOT"
-er_level="ALL"
+libra_er="ALL"
 purge="NO"
 declare -A configured_branches=([rcsw]=devel
                                 [rcppsw]=devel
@@ -108,7 +108,7 @@ while true; do
         --rroot) research_root=$2; shift;;
         --platform) platform=$2; shift;;
         --env) build_env=$2; shift;;
-        --er) er_level=$2; shift;;
+        --er) libra_er=$2; shift;;
         --branch) cmdline_branches+=($2); shift;;
         --robot) robot=$2; shift;;
         --) break;;
@@ -275,7 +275,7 @@ function build_repos() {
         -DCOSM_BRANCH=${configured_branches[cosm]} \
         -DARGOS_BRANCH=${configured_branches[argos]} \
         -DFORDYCA_BRANCH=${configured_branches[fordyca]} \
-        -DLIBRA_ER=$er_level \
+        -DLIBRA_ER=$libra_er \
         -DLIBRA_DEPS_PREFIX=$sys_install_prefix \
         -DCMAKE_BUILD_TYPE=$build_type \
         -DCOSM_BUILD_FOR=${platform}_${robot} \
@@ -309,9 +309,13 @@ function build_repos() {
         git clone https://github.com/swarm-robotics/sierra.git
         cd sierra
         git checkout ${configured_branches[sierra]}
-        pip3 install -r docs/requirements.txt
+
+        # -I forces reinstallation; necessary if in a venv/using a
+        # non-system version of python
+        python3 -m pip install -I -r docs/requirements.txt
+
         cd docs && make man && cd ..
-        pip3 install .
+        python3 -m pip install .
         cd ..
 
         # Clone TITERRA plugin
@@ -319,9 +323,13 @@ function build_repos() {
         git clone https://github.com/swarm-robotics/titerra.git
         cd titerra
         git checkout ${configured_branches[titerra]}
-        pip3 install -r docs/requirements.txt
+
+        # -I forces reinstallation; necessary if in a venv/using a
+        # non-system version of python
+        python3 -m pip install -I -r docs/requirements.txt
+
         cd docs && make man && cd ..
-        pip3 install .
+        python3 -m pip install .
         cd ..
     fi
 }
@@ -384,7 +392,7 @@ function bootstrap_prompt() {
     echo -e "Platform                                 : $platform"
     echo -e "Robot                                    : $robot"
     echo -e "Build type                               : $build_type"
-    echo -e "Event reporting level                    : $er_level"
+    echo -e "Event reporting level                    : $libra_er"
 
     echo -e ""
     echo -e ""

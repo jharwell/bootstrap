@@ -1,20 +1,13 @@
-# This file is generated from information provided by the datasource.  Changes
-# to it will not persist across an instance reboot.  To disable cloud-init's
-# network configuration capabilities, write a file
-# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
-# network: {config: disabled}
 network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth0:
-      dhcp4: true
-      optional: true
   wifis:
     wlan0:
-      optional: true
-      dhcp4: true
-      dhcp6: true
+      dhcp4: yes
       access-points:
-        "Ladyhouse4ever!":
-          password: "C00kieR0cks!"
+        "eduroam":
+          auth:
+            key-management: eap
+            method: peap
+            identity: "harwe006@umn.edu"
+            password: "One does not beg the sun for mercy"
+            ca-certificate: "/home/jharwell/.cat_installer/ca.pem"
+  

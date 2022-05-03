@@ -33,14 +33,14 @@
          repo: https://github.com/swarm-robotics/cosm.git
          dest: "{{ research_root }}/cosm"
          update: yes
-         version: feature/172/extra-turtlebot-sensors
+         version: devel
 
      - name: Pull and rebase FORDYCA
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/fordyca.git
          dest: "{{ research_root }}/fordyca"
          update: yes
-         version: refactor/734/COSM172-flowdown
+         version: devel
 
  - name: Pull and rebase ROSbridge
    import_playbook: rosbridge-update.yaml

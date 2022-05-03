@@ -4,10 +4,17 @@
   lineinfile:
     path: /etc/sudoers.d/90-cloud-init-users
     insertafter: EOF
-    line: "{{ user }} ALL=(ALL) NOPASSWD:ALL"
+    line: "{{ ansible_user_id }} ALL=(ALL) NOPASSWD:ALL"
 
-- name: Add {{ user }} to dialout,i2c
+- name: Ensure group "i2c" exists
+  become: yes
+  ansible.builtin.group:
+    name: i2c
+    state: present
+
+- name: Add {{ ansible_user_id }} to dialout,i2c
+  become: yes
   user:
-    name: '{{ user }}'
+    name: '{{ ansible_user_id }}'
     groups: dialout,i2c
     append: yes
