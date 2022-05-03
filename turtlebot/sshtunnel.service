@@ -1,0 +1,12 @@
+[Unit]
+Description=SSH tunnel
+After=network.service
+
+[Service]
+Restart=always
+RestartSec=20
+User=jharwell
+ExecStart=/home/jharwell/.local/bin/sshtunnel_start.sh
+
+[Install]
+WantedBy=multi-user.target

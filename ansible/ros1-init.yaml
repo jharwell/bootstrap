@@ -1,0 +1,21 @@
+---
+ - name: Playbook to install ROS1 from packages
+   hosts: all
+   become: true
+   tasks:
+     - name: Lookup desired ROS1 config
+       ansible.builtin.include_vars:
+         file: vars/ros1-config.yaml
+
+     - name: Add ros1 sources
+       include_tasks:
+         file: tasks/ros1-add-apt-sources.yaml
+
+     - name: Install ROS1 base
+       apt:
+         pkg:
+           - ros-{{ ros1_distro }}-ros-base
+           - ros-{{ ros1_distro }}-turtlebot3-bringup
+           - ros-{{ ros1_distro }}-turtlebot3-msgs
+         state: latest
+         update_cache: true

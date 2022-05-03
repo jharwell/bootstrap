@@ -1,0 +1,24 @@
+---
+ - name: Initialize ROS1
+   import_playbook: ros1-init.yaml
+
+ - name: Run bootstrap
+   hosts: [develservers]
+   tasks:
+     - name: Clone bootstrap
+       ansible.builtin.git:
+         repo: https://github.com/swarm-robotics/bootstrap.git
+         dest: "$HOME/bootstrap"
+         update: yes
+         version: master
+
+     - name: Run bootstrap
+       shell: >
+         cd bootstrap && ./bootstrap.sh
+         --platform ROS
+         --syspkgs
+         --robot ETURTLEBOT3
+         --env DEVEL
+         --force
+         --branch fordyca:refactor/734/COSM172-flowdown
+         --branch cosm:feature/172/extra-turtlebot-sensors

@@ -1,0 +1,23 @@
+- name: Add ROS setup.bash
+  ansible.builtin.file:
+    src: ./setup.bash
+    dest: $HOME/setup.bash
+    force: yes
+
+- name: Update .bashrc for ROS
+  lineinfile:
+    path: $HOME/.bashrc
+    insertbefore: BOF
+    line: "source /opt/ros/{{ ros1_distro }}/setup.bash"
+
+- name : Unexport ROS_IP
+  lineinfile:
+    dest: $HOME/.bashrc
+    regexp: "^export ROS_IP"
+    state: absent
+
+- name : Unexport ROS_HOSTNAME
+  lineinfile:
+    dest: $HOME/.bashrc
+    regexp: "^export ROS_HOSTNAME"
+    state: absent

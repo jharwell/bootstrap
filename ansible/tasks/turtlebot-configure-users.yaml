@@ -1,0 +1,13 @@
+# Only enabled for the ubuntu user by default.
+- name: Passwordless sudo
+  become: yes
+  lineinfile:
+    path: /etc/sudoers.d/90-cloud-init-users
+    insertafter: EOF
+    line: "{{ user }} ALL=(ALL) NOPASSWD:ALL"
+
+- name: Add {{ user }} to dialout,i2c
+  user:
+    name: '{{ user }}'
+    groups: dialout,i2c
+    append: yes

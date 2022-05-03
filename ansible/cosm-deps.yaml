@@ -4,7 +4,7 @@
    hosts: all
    tasks:
      - name: Add ROS1 sources
-       ansible.builtin.include_tasks:
+       include_tasks:
          file: tasks/ros1-add-apt-sources.yaml
 
      - name: Install ROS 1 via apt
