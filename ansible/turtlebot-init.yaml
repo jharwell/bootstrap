@@ -7,57 +7,57 @@
        include_tasks:
          file: tasks/turtlebot-update-firmware.yaml
 
-     - name: Configure turtlebot users
-       include_tasks:
-         file: tasks/turtlebot-configure-users.yaml
+     # - name: Configure turtlebot users
+     #   include_tasks:
+     #     file: tasks/turtlebot-configure-users.yaml
 
-     - name: Install apt packages
-       become: yes
-       apt:
-         pkg:
-           - dphys-swapfile
-           - libwiringpi-dev
-           - rpi.gpio-common
-           - python3-smbus
-         state: latest
+     # - name: Install apt packages
+     #   become: yes
+     #   apt:
+     #     pkg:
+     #       - dphys-swapfile
+     #       - libwiringpi-dev
+     #       - rpi.gpio-common
+     #       - python3-smbus
+     #     state: latest
 
-     # Values are 0 (use default), 1 (ignore/don't touch), 2 (disable) or 3
-     # (enable).
-     - name: Disable wifi power management
-       become: yes
-       lineinfile:
-         path: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
-         regexp: "^wifi.powersave"
-         line: 'wifi.powersave = 2'
+     # # Values are 0 (use default), 1 (ignore/don't touch), 2 (disable) or 3
+     # # (enable).
+     # - name: Disable wifi power management
+     #   become: yes
+     #   lineinfile:
+     #     path: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+     #     regexp: "^wifi.powersave"
+     #     line: 'wifi.powersave = 2'
 
-     # Set ping UMN gateway 128.101.101.101
-     - name: Enable periodic ping of UMN gateway to keep robots alive for ssh
-       ansible.builtin.cron:
-         name: "Ping UMN gateway"
-         minute: "*/5"
-         job: "ping -c 1 128.101.101.101 >/dev/null 2>&1"
+     # # Set ping UMN gateway 128.101.101.101
+     # - name: Enable periodic ping of UMN gateway to keep robots alive for ssh
+     #   ansible.builtin.cron:
+     #     name: "Ping UMN gateway"
+     #     minute: "*/5"
+     #     job: "ping -c 1 128.101.101.101 >/dev/null 2>&1"
 
-     # The stock .bashrc only sets this if in an interactive shell, which ssh
-     # commands are not. Needed so executables from python packages can be
-     # found.
-     - name: Update .bashrc $PATH
-       lineinfile:
-         path: $HOME/.bashrc
-         insertbefore: BOF
-         line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
+     # # The stock .bashrc only sets this if in an interactive shell, which ssh
+     # # commands are not. Needed so executables from python packages can be
+     # # found.
+     # - name: Update .bashrc $PATH
+     #   lineinfile:
+     #     path: $HOME/.bashrc
+     #     insertbefore: BOF
+     #     line: if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi
 
-     - name: Lookup ROS1 config
-       ansible.builtin.include_vars:
-         file: vars/ros1-config.yaml
+     # - name: Lookup ROS1 config
+     #   ansible.builtin.include_vars:
+     #     file: vars/ros1-config.yaml
 
-     - name: Configure bash for ROS
-       include_tasks:
-         file: tasks/ros1-bash-setup.yaml
+     # - name: Configure bash for ROS
+     #   include_tasks:
+     #     file: tasks/ros1-bash-setup.yaml
 
-     - name: Add cmake sources
-       include_tasks:
-         file: tasks/cmake-add-apt-sources.yaml
+     # - name: Add cmake sources
+     #   include_tasks:
+     #     file: tasks/cmake-add-apt-sources.yaml
 
-     - name: Run TITAN bootstrap
-       include_tasks:
-         file: tasks/turtlebot-bootstrap.yaml
+     # - name: Run TITAN bootstrap
+     #   include_tasks:
+     #     file: tasks/turtlebot-bootstrap.yaml

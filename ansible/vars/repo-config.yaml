@@ -1,10 +1,14 @@
 ---
 
 fordyca_rosbridge_branch: devel
-rcsw_branch: devel
 sierra_rosbridge_branch: devel
 sr04us_branch: devel
 tsl2591_branch: devel
+
+rcsw_branch: devel
+rcppsw_branch: devel
+cosm_branch: devel
+fordyca_branch: devel
 
 username: ROBOT012
 password: Guwlfgchrkzmseab

@@ -10,37 +10,36 @@
        include_vars: vars/develserver-config.yaml
        when: inventory_hostname in groups['develservers']
 
-     - name: Lookup ROS1 config
-       ansible.builtin.include_vars:
-         file: vars/ros1-config.yaml
+     - name: Get repo config
+       include_vars: vars/repo-config.yaml
 
      - name: Pull and rebase RCSW
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/rcsw.git
          dest: "{{ research_root }}/rcsw"
          update: yes
-         version: devel
+         version: "{{ rcsw_branch }}"
 
      - name: Pull and rebase RCPPSW
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/rcppsw.git
          dest: "{{ research_root }}/rcppsw"
          update: yes
-         version: devel
+         version: "{{ rcppsw_branch }}"
 
      - name: Pull and rebase COSM
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/cosm.git
          dest: "{{ research_root }}/cosm"
          update: yes
-         version: devel
+         version: "{{ cosm_branch }}"
 
      - name: Pull and rebase FORDYCA
        ansible.builtin.git:
          repo: https://github.com/swarm-robotics/fordyca.git
          dest: "{{ research_root }}/fordyca"
          update: yes
-         version: devel
+         version: "{{ fordyca_branch }}"
 
  - name: Pull and rebase ROSbridge
    import_playbook: rosbridge-update.yaml

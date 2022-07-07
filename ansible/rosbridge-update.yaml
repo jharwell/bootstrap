@@ -5,6 +5,10 @@
      - name: Get repo config
        include_vars: vars/repo-config.yaml
 
+     - name: Lookup ROS1 config
+       ansible.builtin.include_vars:
+         file: vars/ros1-config.yaml
+
      - name: Get turtlebot config
        include_vars: vars/turtlebot-config.yaml
        when: inventory_hostname in groups['turtlebots']
