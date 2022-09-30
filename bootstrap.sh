@@ -30,6 +30,8 @@ Usage: $0 [option]... [-h|--help]
   checked out for the specified repo.  Pass --branch multiple times to
   configure specific repos. Default=devel for all.
 
+--disablerepo: A name of a repo to skip bootstrapping for.
+
 --env [DEVEL,MSI,ROBOT]: The type of build environment to bootstrap
   for. DEVEL sets up a standard development environment on the current
   machine. MSI sets up a "production" environment on the Minnesota
@@ -74,11 +76,11 @@ sys_install_prefix=$HOME/.local/system
 research_install_prefix=$HOME/.local
 research_root=$HOME/research
 platform="ARGOS"
-do_prompt="YES"
+do_confirm="YES"
 build_type="DEV"
 build_env="DEVEL"
 robot="FOOTBOT"
-er_level="ALL"
+libra_er="ALL"
 purge="NO"
 declare -A configured_branches=([rcsw]=devel
                                 [rcppsw]=devel
@@ -88,20 +90,29 @@ declare -A configured_branches=([rcsw]=devel
                                 [fordyca]=devel
                                 [sierra]=devel
                                 [titerra]=devel
-                                [fordyca_rosbridge]=devel
-                                [sierra_rosbridge]=devel
-                                [sr04us]=devel
+                                [rosbridge]=devel
+                               )
+declare -A disabled_repos=([rcsw]=NO
+                             [rcppsw]=NO
+                             [argos]=NO
+                             [eepuck3D]=NO
+                             [cosm]=NO
+                             [fordyca]=NO
+                             [sierra]=NO
+                             [titerra]=NO
+                             [rosbridge]=NO
                                )
 cmdline_branches=()
+cmdline_disabledrepos=()
 
-options=$(getopt -o hfp --long help,opt,syspkgs,force,purge,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,branch:,er:  -n "BOOTSTRAP" -- "$@")
+options=$(getopt -o hfp --long help,opt,syspkgs,force,purge,sysprefix:,rprefix:,rroot:,platform:,env:,robot:,branch:,er:,disablerepo:  -n "BOOTSTRAP" -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$options"
 while true; do
     case "$1" in
         -h|--help) usage;;
-        -f|--force) do_prompt="NO";;
+        -f|--force) do_confirm="NO";;
         -p|--purge) purge="YES";;
         --syspkgs) install_sys_pkgs="YES";;
         --opt) build_type="OPT";;
@@ -110,8 +121,9 @@ while true; do
         --rroot) research_root=$2; shift;;
         --platform) platform=$2; shift;;
         --env) build_env=$2; shift;;
-        --er) er_level=$2; shift;;
+        --er) libra_er=$2; shift;;
         --branch) cmdline_branches+=($2); shift;;
+        --disablerepo) cmdline_disabledrepos+=($2); shift;;
         --robot) robot=$2; shift;;
         --) break;;
         *) break;;
@@ -144,6 +156,12 @@ do
     configured_branches[$KEY]=${branch_overrides[$KEY]};
 done
 
+# Configure repos to skip bootstraping
+for KEY in ${cmdline_disabledrepos[@]}; do
+    echo $KEY
+    disabled_repos[$KEY]=YES
+done
+
 ################################################################################
 # Main Functions
 ################################################################################
@@ -165,50 +183,60 @@ function install_packages() {
             gcc-9-arm-linux-gnueabihf
             g++-9-arm-linux-gnueabihf
 
-            # For chrooting into an ARM image
-            qemu
-            qemu-user-static
-            binfmt-support
-            systemd-container
-
             npm
             graphviz
             doxygen
             cppcheck
-            libclang-10-dev
-            clang-tools-10
-            clang-format-10
-            clang-tidy-10
+            libclang-dev
+            clang-tools
+            clang-format
+            clang-tidy
         )
 
-        rcppsw_pkgs_core=(libboost-all-dev
-                          liblog4cxx-dev
-                         )
-        rcppsw_pkgs_devel=(catch
-                          )
+        if [ "NO" == ${disabled_repos[rcppsw]} ]; then
+            rcppsw_pkgs_core=(libboost-all-dev
+                              liblog4cxx-dev
+                             )
+            rcppsw_pkgs_devel=(catch
+                              )
+        fi
 
-        cosm_pkgs_core=(ros-noetic-ros-base
-                        ros-noetic-turtlebot3-bringup
-                        ros-noetic-turtlebot3-msgs
-                        qtbase5-dev
-                        libfreeimageplus-dev
-                        freeglut3-dev
-                        libeigen3-dev
-                        libudev-dev
-                        liblua5.3-dev
-                       )
+        if [ "NO" == ${disabled_repos[cosm]} ]; then
 
-        cosm_pkgs_devel=(ros-noetic-desktop-full
-                        )
+            cosm_pkgs_core=(ros-noetic-ros-base
+                            ros-noetic-turtlebot3-bringup
+                            ros-noetic-turtlebot3-msgs
+                            libwiringpi-dev
+                            qtbase5-dev
+                            libfreeimageplus-dev
+                            freeglut3-dev
+                            libeigen3-dev
+                            libudev-dev
+                            liblua5.3-dev
+                           )
+
+            if [ "$platform" = "ROS" ]; then
+                cosm_pkgs_core=("${cosm_pkgs_core[@]}" ros-noetic-ros-base
+                                ros-noetic-turtlebot3-bringup
+                                ros-noetic-turtlebot3-msgs)
+
+                cosm_pkgs_devel=(ros-noetic-desktop-full
+                                )
+            fi
+        fi
+
+        if [ "NO" == ${disabled_repos[fordyca]} ]; then
+            fordyca_pkgs_core=(libnlopt-cxx-dev)
+        fi
 
         # Modern cmake required, default with most ubuntu versions is too
         # old--use kitware PPA.
-        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
-        echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
-        sudo apt-get update
+        # wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+        # echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
+
 
         # Install core packages (must be loop to ignore ones that don't exist).
-        for pkg in "${libra_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]}"
+        for pkg in "${libra_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]} ${fordyca_pkgs_core[@]}"
         do
             printf "${BLUE}****************************************\n${NC}"
             printf "${BLUE}-- ${pkg} ${NC}\n"
@@ -242,6 +270,9 @@ function install_packages() {
     if [ "$platform" = "ROS" ]; then
         python_pkgs_core=(
             catkin_tools
+            adafruit-circuitpython-tca9548a
+            adafruit-circuitpython-tsl2591
+            adafruit-blinka
         )
         pip3 install --user  "${python_pkgs_core[@]}"
     fi
@@ -252,42 +283,33 @@ function build_repos() {
     # Now that all system packages are installed, build all repos
     mkdir -p $research_root && cd $research_root
 
-    # This is needed to be able to build COSM
-    if [ "$platform" = "ROS" ]; then
-
-        mkdir -p $research_root/rosbridge && cd $research_root/rosbridge
-
-        git clone -b ${configured_branches[sr04us]} https://github.com/swarm-robotics/sr04us.git src/sr04us
-
-        # Turtlebot actually has 4 cores, but not enough memory to be able
-        # to do parallel compilation.
-        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
-
-        source /opt/ros/noetic/setup.bash
-        catkin init
-        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
-        catkin build sr04us $n_cores
-
-        source $research_install_prefix/ros/setup.bash
-        cd ..
-    fi
-
+    set -x
     rcppsw_args=$([ "ROS" = "$platform" ] && echo "-DRCPPSW_AL_MT_SAFE_TYPES=NO" || echo "-DRCPPSW_AL_MT_SAFE_TYPES=YES")
 
     # Turtlebot actually has 4 cores, but not enough memory to be able
     # to do parallel compilation.
     n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-DPARALLEL_LEVEL=1" || echo "")
 
-    set -x
+    # This is needed to be able to build COSM
+    if [ "$platform" = "ROS" ]; then
+        source /opt/ros/noetic/setup.bash
+    fi
+
     cmake \
         -DRESEARCH_DEPS_PREFIX=$sys_install_prefix \
         -DRESEARCH_INSTALL_PREFIX=$research_install_prefix \
+        -DBOOTSTRAP_SKIP_RCSW=${disabled_repos[rcsw]} \
+        -DBOOTSTRAP_SKIP_RCPPSW=${disabled_repos[rcppsw]} \
+        -DBOOTSTRAP_SKIP_COSM=${disabled_repos[cosm]} \
+        -DBOOTSTRAP_SKIP_ARGOS=${disabled_repos[argos]} \
+        -DBOOTSTRAP_SKIP_FORDYCA=${disabled_repos[fordyca]} \
+        -DBOOTSTRAP_SKIP_ROSBRIDGE=${disabled_repos[rosbridge]} \
         -DRCSW_BRANCH=${configured_branches[rcsw]} \
         -DRCPPSW_BRANCH=${configured_branches[rcppsw]} \
         -DCOSM_BRANCH=${configured_branches[cosm]} \
         -DARGOS_BRANCH=${configured_branches[argos]} \
         -DFORDYCA_BRANCH=${configured_branches[fordyca]} \
-        -DLIBRA_ER=$er_level \
+        -DLIBRA_ER=$libra_er \
         -DLIBRA_DEPS_PREFIX=$sys_install_prefix \
         -DCMAKE_BUILD_TYPE=$build_type \
         -DCOSM_BUILD_FOR=${platform}_${robot} \
@@ -296,47 +318,53 @@ function build_repos() {
         $rcppsw_args \
         $bootstrap_dir
 
-    # Use verbose make by default, to make debugging bad include paths,
-    # etc. easier without having to re-run.
-    make VERBOSE=1
 
-    # COSM is built, so we can build the entirety of the ROSbridge
     if [ "$platform" = "ROS" ]; then
-        git clone -b ${configured_branches[sierra_rosbridge]} https://github.com/swarm-robotics/sierra_rosbridge.git src/sierra_rosbridge
-        git clone -b ${configured_branches[fordyca_rosbridge]} https://github.com/swarm-robotics/fordyca_rosbridge.git src/fordyca_rosbridge
+        # COSM needs part of the ROSbridge to be built and installed
+        # to compile, so build it first
+        make VERBOSE=1 rosbridge_drivers
 
-        # Turtlebot actually has 4 cores, but not enough memory to be able
-        # to do parallel compilation.
-        n_cores=$([ "ETURTLEBOT3" = "$robot" ] && [ "ROBOT" = "$build_env" ] && echo "-j 1" || echo "")
+        # Get new ROS package/catkin definitions
+        source $research_install_prefix/setup.bash
 
-        catkin init
-        catkin config --extend /opt/ros/noetic --install --install-space=$research_install_prefix/ros
-        catkin build $n_cores
+        # Build everything else
+        make VERBOSE=1
+
+    else
+        # Use verbose make by default, to make debugging bad include paths,
+        # etc. easier without having to re-run.
+        make VERBOSE=1
     fi
 
-
-    if [ "$build_env" = "DEVEL" ] || [ "$build_env" = "MSI" ]; then
+    if [ "$build_env" = "DEVEL" ]; then
         cd $research_root
 
-        # Clone SIERRA
-        if [ -d sierra ]; then rm -rf sierra; fi
-        git clone https://github.com/swarm-robotics/sierra.git
-        cd sierra
-        git checkout ${configured_branches[sierra]}
-        pip3 install -r docs/requirements.txt
-        cd docs && make man && cd ..
-        pip3 install .
-        cd ..
+        if [ "NO" == ${disabled_repos[sierra]} ]; then
+            # Clone SIERRA
+            if [ -d sierra ]; then rm -rf sierra; fi
+            git clone https://github.com/swarm-robotics/sierra.git
+            cd sierra
+            git checkout ${configured_branches[sierra]}
 
-        # Clone TITERRA plugin
-        if [ -d titerra ]; then rm -rf titerra; fi
-        git clone https://github.com/swarm-robotics/titerra.git
-        cd titerra
-        git checkout ${configured_branches[titerra]}
-        pip3 install -r docs/requirements.txt
-        cd docs && make man && cd ..
-        pip3 install .
-        cd ..
+            # -I forces reinstallation; necessary if in a venv/using a
+            # non-system version of python
+            python3 -m pip install -I -r docs/requirements.txt
+
+            cd docs && make man && cd ..
+            python3 -m pip install .
+            cd ..
+        fi
+
+        if [ "NO" == ${disabled_repos[titerra]} ]; then
+
+            # -I forces reinstallation; necessary if in a venv/using a
+            # non-system version of python
+            python3 -m pip install -I -r docs/requirements.txt
+
+            cd docs && make man && cd ..
+            python3 -m pip install .
+            cd ..
+        fi
     fi
 }
 
@@ -382,6 +410,8 @@ function bootstrap_main() {
 function bootstrap_prompt() {
     branches=$(for K in "${!configured_branches[@]}"; do echo -n "$K -> ${configured_branches[$K]},\n"; done)
     branches=$(tabs 43; echo -ne $branches | sed -e "s|^|\t|g")
+    disabled=$(for K in "${!disabled_repos[@]}"; do echo -n "$K -> ${disabled_repos[$K]},\n"; done)
+    disabled=$(tabs 43; echo -ne $disabled | sed -e "s|^|\t|g")
 
     echo -e "********************************************************************************"
     echo -e "Bootstrap Configuration Summary:"
@@ -390,6 +420,8 @@ function bootstrap_prompt() {
     echo -e ""
     echo -e "Install .deb packages                    : $install_sys_pkgs"
     echo -e "Clone repos to                           : $research_root"
+    echo -e "Disabled repos                           : SEE BELOW"
+    echo -e "$disabled"
     echo -e "Checkout branches                        : SEE BELOW"
     echo -e "$branches"
     echo -e "Install compiled dependencies to         : $sys_install_prefix"
@@ -398,25 +430,25 @@ function bootstrap_prompt() {
     echo -e "Platform                                 : $platform"
     echo -e "Robot                                    : $robot"
     echo -e "Build type                               : $build_type"
-    echo -e "Event reporting level                    : $er_level"
+    echo -e "Event reporting level                    : $libra_er"
 
     echo -e ""
     echo -e ""
     echo -e "********************************************************************************"
 
-    if [ "$do_prompt" = "YES" ]; then
-        while true; do
-            echo "Please verify the above configuration."
-            echo "WARNING: Anything in the installation directories may be overwritten!"
-            read -p "Execute bootstrap (yes/no)? " yn
+    # if [ "$do_confirm" = "YES" ]; then
+    #     while true; do
+    #         echo "Please verify the above configuration."
+    #         echo "WARNING: Anything in the installation directories may be overwritten!"
+    #         read -p "Execute bootstrap (yes/no)? " yn
 
-            case $yn in
-                [Yy]* ) break;;
-                [Nn]* ) exit;;
-                * ) echo "Please answer yes or no.";;
-            esac
-        done
-    fi
+    #         case $yn in
+    #             [Yy]* ) break;;
+    #             [Nn]* ) exit;;
+    #             * ) echo "Please answer yes or no.";;
+    #         esac
+    #     done
+    # fi
 }
 
 bootstrap_prompt
