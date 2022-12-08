@@ -1,4 +1,4 @@
-project(swarm-robotics)
+project(jharwell-thesis)
 
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
@@ -35,9 +35,15 @@ endif()
 # RCSW
 ################################################################################
 if (NOT BOOTSTRAP_SKIP_RCSW)
+  if(DEFINED ENV{RCSW_DEPLOY_TOKEN})
+    message(STATUS "Using RCSW_DEPLOY_TOKEN")
+    set(RCSW_URL https://gitlab-deploy-token:$ENV{RCSW_DEPLOY_TOKEN}@git.sift.net/jharwell/rcsw.git)
+  else()
+    set(RCSW_URL git@git.sift.net:jharwell/rcsw.git)
+  endif()
   ExternalProject_Add(rcsw
     PREFIX .
-    GIT_REPOSITORY https://github.com/swarm-robotics/rcsw.git
+    GIT_REPOSITORY ${RCSW_URL}
     GIT_TAG ${RCSW_BRANCH}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${RESEARCH_INSTALL_PREFIX} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     UPDATE_COMMAND mkdir -p build
@@ -50,6 +56,26 @@ endif()
 ################################################################################
 # RCPPSW
 ################################################################################
+ExternalProject_Add(ticpp
+  DEPENDS
+  PREFIX .
+  GIT_REPOSITORY https://github.com/wxFormBuilder/ticpp.git
+  GIT_TAG master
+  CMAKE_ARGS
+  -DCMAKE_INSTALL_PREFIX=${RESEARCH_DEPS_PREFIX}
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  UPDATE_COMMAND mkdir -p build
+  CONFIGURE_COMMAND cmake
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+  -DCMAKE_INSTALL_PREFIX=${RESEARCH_DEPS_PREFIX}
+  ..
+  PATCH_COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ticpp.patch || true
+  BUILD_COMMAND make all -j ${PARALLEL_LEVEL} CFLAGS="-fPIC"
+  SOURCE_DIR ticpp
+  BINARY_DIR ticpp/build
+  )
+
 if (NOT BOOTSTRAP_SKIP_RCPPSW)
   set(BOOST_REQUESTED_VERSION 1.71.0)
 
@@ -79,30 +105,10 @@ if (NOT BOOTSTRAP_SKIP_RCPPSW)
 
   endif()
 
-  ExternalProject_Add(ticpp
-    DEPENDS
-    PREFIX .
-    GIT_REPOSITORY https://github.com/wxFormBuilder/ticpp.git
-    GIT_TAG master
-    CMAKE_ARGS
-    -DCMAKE_INSTALL_PREFIX=${RESEARCH_DEPS_PREFIX}
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo
-    UPDATE_COMMAND mkdir -p build
-    CONFIGURE_COMMAND cmake
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    -DCMAKE_INSTALL_PREFIX=${RESEARCH_DEPS_PREFIX}
-    ..
-    PATCH_COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/ticpp.patch || true
-    BUILD_COMMAND make all -j ${PARALLEL_LEVEL} CFLAGS="-fPIC"
-    SOURCE_DIR ticpp
-    BINARY_DIR ticpp/build
-    )
-
   ExternalProject_Add(rcppsw
     DEPENDS rcsw ticpp
     PREFIX .
-    GIT_REPOSITORY https://github.com/swarm-robotics/rcppsw.git
+    GIT_REPOSITORY git@git.sift.net:jharwell/rcppsw.git
     GIT_TAG ${RCPPSW_BRANCH}
     CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${RESEARCH_INSTALL_PREFIX}
@@ -126,7 +132,7 @@ if (NOT BOOTSTRAP_SKIP_ARGOS)
     # ARGoS
     ExternalProject_Add(argos
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/argos3.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/argos3.git
       GIT_TAG ${ARGOS_BRANCH}
       UPDATE_COMMAND mkdir -p build
       CONFIGURE_COMMAND cmake
@@ -150,7 +156,7 @@ if (NOT BOOTSTRAP_SKIP_ARGOS)
     if(BUILD_ARGOS_EEPUCK)
       ExternalProject_Add(argos-eepuck3D
         PREFIX .
-        GIT_REPOSITORY https://github.com/swarm-robotics/argos3-eepuck3D.git
+        GIT_REPOSITORY git@git.sift.net:jharwell/argos3-eepuck3D.git
         GIT_TAG ${EEPUCK3D_BRANCH}
         UPDATE_COMMAND mkdir -p build
         # This code expects ARGoS to be installed system wide, so we have to
@@ -183,7 +189,7 @@ if (NOT BOOTSTRAP_SKIP_COSM)
     ExternalProject_Add(cosm
       DEPENDS ${COSM_DEPENDS}
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/cosm.git
       GIT_TAG ${COSM_BRANCH}
       UPDATE_COMMAND mkdir -p build
       BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
@@ -202,7 +208,7 @@ if (NOT BOOTSTRAP_SKIP_COSM)
     ExternalProject_Add(rosbridge_drivers
       DEPENDS rcppsw
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/rosbridge.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/rosbridge.git
       GIT_TAG devel
       UPDATE_COMMAND git submodule update --init --remote --recursive &&
       git pull --rebase
@@ -219,7 +225,7 @@ if (NOT BOOTSTRAP_SKIP_COSM)
     ExternalProject_Add(cosm
       DEPENDS ${COSM_DEPENDS}
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/cosm.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/cosm.git
       GIT_TAG ${COSM_BRANCH}
       UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
       BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
@@ -270,7 +276,7 @@ if (NOT BOOTSTRAP_SKIP_FORDYCA)
     ExternalProject_Add(fordyca
       DEPENDS ${FORDYCA_DEPENDS}
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/fordyca.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/fordyca.git
       GIT_TAG ${FORDYCA_BRANCH}
       UPDATE_COMMAND mkdir -p build
       BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
@@ -289,7 +295,7 @@ if (NOT BOOTSTRAP_SKIP_FORDYCA)
     ExternalProject_Add(fordyca
       DEPENDS ${FORDYCA_DEPENDS}
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/fordyca.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/fordyca.git
       GIT_TAG ${FORDYCA_BRANCH}
       UPDATE_COMMAND git submodule update --init --remote --recursive && git pull --rebase && mkdir -p build
       BUILD_COMMAND make all -j ${PARALLEL_LEVEL}
@@ -314,7 +320,7 @@ if (NOT BOOTSTRAP_SKIP_ROSBRIDGE)
     ExternalProject_Add(rosbridge_bindings
       DEPENDS fordyca
       PREFIX .
-      GIT_REPOSITORY https://github.com/swarm-robotics/rosbridge.git
+      GIT_REPOSITORY git@git.sift.net:jharwell/rosbridge.git
       GIT_TAG devel
       UPDATE_COMMAND git submodule update --init --remote --recursive &&
       git pull --rebase

@@ -65,9 +65,15 @@ function command_failed() {
     printf "${RED}-- The previous command failed --\n${NC}"
 }
 
-# Make sure script was not run as root or with sudo
-if [ $(id -u) = 0 ]; then
-    echo "This script cannot be run as root."
+SUDO=sudo
+GITLAB_CI="no"
+
+if [[ -n $CI_JOB_ID ]]; then
+    echo "Running as root in gitlab CI"
+    SUDO=""
+    GITLAB_CI="yes"
+else
+    echo "This script cannot be run as root outside of CI"
     exit 1
 fi
 
@@ -158,7 +164,6 @@ done
 
 # Configure repos to skip bootstraping
 for KEY in ${cmdline_disabledrepos[@]}; do
-    echo $KEY
     disabled_repos[$KEY]=YES
 done
 
@@ -173,25 +178,47 @@ function install_packages() {
     if [ "YES" = "$install_sys_pkgs" ]; then
         libra_pkgs_core=(make
                          cmake
-                         git
-                         ccache
+                         gcc
+                         g++
                          gcc-9
                          g++-9
                         )
         libra_pkgs_devel=(
-            # For testing ARM cross-compilation
-            gcc-9-arm-linux-gnueabihf
-            g++-9-arm-linux-gnueabihf
+            lcov
+            python3-pip
+            file
 
-            npm
+            # For building documentation
             graphviz
             doxygen
-            cppcheck
-            libclang-dev
-            clang-tools
-            clang-format
-            clang-tidy
+            curl
         )
+
+        if [[ "NO" == $GITLAB_CI ]]; then
+            libra_pkgs_devel=("${libra_pkgs_devel}"
+                              # For testing ARM cross-compilation
+                              gcc-9-arm-linux-gnueabihf
+                              g++-9-arm-linux-gnueabihf
+
+                              # This doesn't help because you only
+                              # build once
+                              ccache
+
+                              npm
+                              cppcheck
+                              libclang-dev
+                              clang-tools
+                              clang-format
+                              clang-tidy
+                             )
+        fi
+
+
+        if [ "NO" == ${disabled_repos[rcsw]} ]; then
+            rcsw_pkgs_core=()
+            rcsw_pkgs_devel=(catch
+                            )
+        fi
 
         if [ "NO" == ${disabled_repos[rcppsw]} ]; then
             rcppsw_pkgs_core=(libboost-all-dev
@@ -203,11 +230,7 @@ function install_packages() {
 
         if [ "NO" == ${disabled_repos[cosm]} ]; then
 
-            cosm_pkgs_core=(ros-noetic-ros-base
-                            ros-noetic-turtlebot3-bringup
-                            ros-noetic-turtlebot3-msgs
-                            libwiringpi-dev
-                            qtbase5-dev
+            cosm_pkgs_core=(qtbase5-dev
                             libfreeimageplus-dev
                             freeglut3-dev
                             libeigen3-dev
@@ -218,7 +241,8 @@ function install_packages() {
             if [ "$platform" = "ROS" ]; then
                 cosm_pkgs_core=("${cosm_pkgs_core[@]}" ros-noetic-ros-base
                                 ros-noetic-turtlebot3-bringup
-                                ros-noetic-turtlebot3-msgs)
+                                ros-noetic-turtlebot3-msgs
+                                libwiringpi-dev)
 
                 cosm_pkgs_devel=(ros-noetic-desktop-full
                                 )
@@ -229,52 +253,62 @@ function install_packages() {
             fordyca_pkgs_core=(libnlopt-cxx-dev)
         fi
 
-        # Modern cmake required, default with most ubuntu versions is too
-        # old--use kitware PPA.
-        # wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
-        # echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
-
-
         # Install core packages (must be loop to ignore ones that don't exist).
-        for pkg in "${libra_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]} ${fordyca_pkgs_core[@]}"
+        for pkg in "${libra_pkgs_core[@]} ${rcsw_pkgs_core[@]} ${rcppsw_pkgs_core[@]} ${cosm_pkgs_core[@]} ${fordyca_pkgs_core[@]}"
         do
             printf "${BLUE}****************************************\n${NC}"
             printf "${BLUE}-- ${pkg} ${NC}\n"
-            sudo apt-get install $pkg -my || command_failed
+            $SUDO apt-get install $pkg -my || command_failed
         done
 
         if [ "$build_env" = "DEVEL" ]; then
             # Install extra development packages (must be loop to ignore
             # ones that don't exist).
-            for pkg in "${libra_pkgs_devel[@]} ${rcppsw_pkgs_devel[@]} ${cosm_pkgs_devel[@]}"
+            for pkg in "${libra_pkgs_devel[@]} ${rcsw_pkgs_devel[@]} ${rcppsw_pkgs_devel[@]} ${cosm_pkgs_devel[@]}"
             do
                 printf "${BLUE}****************************************\n${NC}"
                 printf "${BLUE}-- ${pkg} ${NC}\n"
-                sudo apt-get install $pkg -my || command_failed
+                $SUDO apt-get install $pkg -my || command_failed
             done
         fi
     fi
 
+    # Now, install non-systm packages
+    #
+    # Core pkgs=those needed in all build environments.
+    # Devel pkgs=those only needed for development.
 
+    libra_python_pkgs_devel=(
+        # common packages
+        cpplint
+
+        # For building documentation
+        sphinx
+        docutils==0.16
+        sphinx-rtd-theme
+        sphinx-argparse
+        sphinx-tabs
+        sphinx-last-updated-by-git
+        sphinxcontrib-doxylink
+        autoapi
+        graphviz
+        breathe
+        exhale
+    )
+
+    ros_python_pkgs_core=(
+        catkin_tools
+        adafruit-circuitpython-tca9548a
+        adafruit-circuitpython-tsl2591
+        adafruit-blinka
+    )
 
     if [ "$build_env" = "DEVEL" ]; then
-        python_pkgs_devel=(
-            # RCPPSW packages
-            cpplint
-            breathe
-            exhale
-        )
-        pip3 install --user  "${python_pkgs_devel[@]}"
+        pip3 install --user "${libra_python_pkgs_devel[@]}"
     fi
 
     if [ "$platform" = "ROS" ]; then
-        python_pkgs_core=(
-            catkin_tools
-            adafruit-circuitpython-tca9548a
-            adafruit-circuitpython-tsl2591
-            adafruit-blinka
-        )
-        pip3 install --user  "${python_pkgs_core[@]}"
+        pip3 install --user  "${ros_python_pkgs_core[@]}"
     fi
 }
 
@@ -342,7 +376,7 @@ function build_repos() {
         if [ "NO" == ${disabled_repos[sierra]} ]; then
             # Clone SIERRA
             if [ -d sierra ]; then rm -rf sierra; fi
-            git clone https://github.com/swarm-robotics/sierra.git
+            git clone https://github.com/jharwell/sierra.git
             cd sierra
             git checkout ${configured_branches[sierra]}
 
@@ -356,6 +390,11 @@ function build_repos() {
         fi
 
         if [ "NO" == ${disabled_repos[titerra]} ]; then
+            # Clone TITERRA
+            if [ -d titerra ]; then rm -rf titerra; fi
+            git clone https://github.com/jharwell/titerra.git
+            cd titerra
+            git checkout ${configured_branches[titerra]}
 
             # -I forces reinstallation; necessary if in a venv/using a
             # non-system version of python
@@ -436,19 +475,19 @@ function bootstrap_prompt() {
     echo -e ""
     echo -e "********************************************************************************"
 
-    # if [ "$do_confirm" = "YES" ]; then
-    #     while true; do
-    #         echo "Please verify the above configuration."
-    #         echo "WARNING: Anything in the installation directories may be overwritten!"
-    #         read -p "Execute bootstrap (yes/no)? " yn
+    if [ "$do_confirm" = "YES" ]; then
+        while true; do
+            echo "Please verify the above configuration."
+            echo "WARNING: Anything in the installation directories may be overwritten!"
+            read -p "Execute bootstrap (yes/no)? " yn
 
-    #         case $yn in
-    #             [Yy]* ) break;;
-    #             [Nn]* ) exit;;
-    #             * ) echo "Please answer yes or no.";;
-    #         esac
-    #     done
-    # fi
+            case $yn in
+                [Yy]* ) break;;
+                [Nn]* ) exit;;
+                * ) echo "Please answer yes or no.";;
+            esac
+        done
+    fi
 }
 
 bootstrap_prompt
